@@ -3,20 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Café照シフト">
-<meta name="color-scheme" content="light only">
-<meta name="supported-color-schemes" content="light">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <title>Cafe照 シフト管理</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
-/* ダークモード対策（強制ライトモード） */
-@media (prefers-color-scheme: dark) {
-  html, body { background: #f5f0e8 !important; color: #1e1810 !important; color-scheme: light !important; }
-}
 body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-height:100vh;}
 :root{
   --accent:#b8622a;--green:#3a8a5a;--red:#c03030;--yellow:#c08020;--blue:#2860a8;
@@ -231,8 +221,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
     font-size:7.5pt!important;
   }
   /* 前半の後で改ページ */
-  #halfTable1{page-break-after:always;}
-  #halfTable2{page-break-before:always;}
+  #halfTable1{page-break-after:always;page-break-inside:avoid;}
+  #halfTable2{page-break-before:always;page-break-inside:avoid;}
+  /* サマリーと凡例を非表示 */
+  #monthlySummary,#monthlyLegend,.page.print-target .mnav,
+  .page.print-target>div:first-child+div{display:none!important;}
   /* 背景色を強制印刷 */
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   /* A4横 */
@@ -400,6 +393,8 @@ const ROLES=[
   {id:'P', name:'ピザ場',            color:'#906020',must:true },
   {id:'W', name:'洗い場',            color:'#406090',must:false},
   {id:'J', name:'事務作業',           color:'#507050',must:false},
+  {id:'な', name:'洋食だいにんぐなかむら', color:'#8b4513',must:false},
+  {id:'は', name:'博雲堂',              color:'#2060a0',must:false},
 ];
 const MUST=['C','B','D','K','P'];
 
@@ -501,7 +496,7 @@ function countWkHol(staffId){
 // ============================================================
 // CALENDAR
 // ============================================================
-function chMonth(d){curM+=d;if(curM<0){curM=11;curY--;}if(curM>11){curM=0;curY++;}renderCal();}
+function chMonth(d){curM+=d;if(curM<0){curM=11;curY--;}if(curM>11){curM=0;curY++;}weekOff=0;renderCal();}
 
 function renderCal(){
   document.getElementById('calTitle').textContent=`${curY}年 ${curM+1}月`;
@@ -757,9 +752,54 @@ function closeBg(e){if(e.target===document.getElementById('ov'))closeModal();}
 // WEEKLY VIEW
 // ============================================================
 function chWeek(d){weekOff+=d;renderWeekly();}
+
+function printHalf(half){
+  // 月間出勤表の前半または後半だけを印刷
+  const y=curY,m=curM,daysIn=new Date(y,m+1,0).getDate();
+  const startDay=half===1?1:16;
+  const endDay=half===1?15:daysIn;
+  const title=`${y}年${m+1}月　月間出勤表　${half===1?'前半（1〜15日）':'後半（16〜'+daysIn+'日）'}`;
+
+  const tableHTML=buildHalfTable(y,m,startDay,endDay);
+  const legend=ROLES.map(r=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px;font-size:8pt"><span style="display:inline-block;width:16px;height:14px;border-radius:2px;background:${r.color}44;color:${r.color};font-weight:700;text-align:center;font-size:7pt;line-height:14px">${r.id}</span>${r.name}</span>`).join('');
+
+  const html=`<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<title>${title}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans JP',sans-serif;padding:8mm;background:#fff;color:#1e1810;}
+h2{font-size:12pt;color:#b8622a;margin-bottom:6px;font-weight:700;}
+table{border-collapse:collapse;width:100%;}
+th,td{border:1px solid #ddd0b8;text-align:center;padding:2px;}
+th{background:#f5f0e8;font-weight:600;}
+.legend{margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;font-size:8pt;}
+.pbtn{position:fixed;top:8px;right:8px;background:#3a8a5a;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:11pt;font-family:inherit;cursor:pointer;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+@media print{.pbtn{display:none!important;}@page{size:A4 landscape;margin:8mm;}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}}
+</style></head><body>
+<button class="pbtn" onclick="window.print()">🖨 印刷 / PDF</button>
+<h2>${title}</h2>
+${tableHTML}
+<div class="legend">${legend}
+<span style="margin-right:8px"><b style="color:#c03030">✕</b> 欠勤希望</span>
+<span>□ 未アサイン</span>
+</div>
+</body></html>`;
+
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=title+'.html';a.click();
+  URL.revokeObjectURL(url);
+}
 function getWeekDates(){
-  const today=new Date(),dow=today.getDay();
-  const mon=new Date(today);mon.setDate(today.getDate()-(dow===0?6:dow-1)+weekOff*7);
+  // weekOffが0のときは現在月の最初の週を基準にする
+  const base=new Date(curY,curM,1); // 選択月の1日
+  const dow=base.getDay();
+  const mon=new Date(base);
+  mon.setDate(base.getDate()-(dow===0?6:dow-1)); // その週の月曜
+  mon.setDate(mon.getDate()+weekOff*7);
   return Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});
 }
 function renderWeekly(){
@@ -1275,6 +1315,45 @@ function doPrint(){
       document.title=origTitle;
     },1000);
   },300);
+}
+
+async function saveViewData(){
+  const btn=document.getElementById('shareViewBtn');
+  btn.textContent='⏳ 保存中...';btn.disabled=true;
+
+  // 前半・後半のHTMLを生成
+  const y=curY,m=curM,daysIn=new Date(y,m+1,0).getDate();
+  const title=`${y}年${m+1}月　出勤表`;
+  const half1=buildHalfTable(y,m,1,15);
+  const half2=buildHalfTable(y,m,16,daysIn);
+  const legend=ROLES.map(r=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px"><span style="display:inline-block;width:16px;height:14px;border-radius:2px;background:${r.color}44;color:${r.color};font-weight:700;text-align:center;font-size:7pt;line-height:14px">${r.id}</span>${r.name}</span>`).join('');
+
+  const viewData={
+    title,
+    half1HTML:half1,
+    half2HTML:half2,
+    legendHTML:legend,
+    daysIn,
+    savedAt:new Date().toLocaleString('ja-JP')
+  };
+
+  // GASに保存
+  try{
+    localStorage.setItem('cafeViewData', JSON.stringify(viewData));
+    const storedPrint=localStorage.getItem('cafePrintData');
+    const pd=storedPrint?JSON.parse(storedPrint):null;
+    const payload=JSON.stringify({staff,dayData,lineHistory,printData:pd,viewData});
+    await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:payload});
+    btn.textContent='✓ 共有しました！';
+    const viewUrl=location.href.substring(0,location.href.lastIndexOf('/'))+'/cafe-view.html';
+    setTimeout(()=>{
+      btn.textContent='📤 出勤表を共有';btn.disabled=false;
+    },3000);
+    alert('✓ 出勤表を共有しました！\n\nスタッフへ送るURL:\n'+viewUrl+'\n\nこのURLをLINEで送ってください。');
+  }catch(e){
+    btn.textContent='📤 出勤表を共有';btn.disabled=false;
+    alert('⚠ 保存に失敗しました：'+e.message);
+  }
 }
 
 function showPdfGuide(){
