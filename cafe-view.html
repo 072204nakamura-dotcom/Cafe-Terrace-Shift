@@ -8,27 +8,45 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-height:100vh;}
-.hdr{background:#1e1810;color:#f5f0e8;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;}
+.hdr{background:#1e1810;color:#f5f0e8;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
 .logo{font-size:1.1rem;font-weight:700;color:#e8a060;}
 .logo-sub{font-size:.62rem;color:#8a7a60;margin-left:6px;}
+.hdr-right{text-align:right;}
 .reload-btn{background:rgba(255,255,255,.15);border:none;color:#f5f0e8;padding:6px 12px;border-radius:6px;font-size:.72rem;font-family:inherit;cursor:pointer;}
-.info{font-size:.62rem;color:#8a7a60;text-align:right;margin-top:2px;}
-.content{padding:12px;}
+.info{font-size:.6rem;color:#8a7a60;margin-top:2px;}
+/* TABS */
+.tabs{display:flex;background:#fff;border-bottom:2px solid #ddd0b8;overflow-x:auto;}
+.tab{flex:1;padding:10px 6px;border:none;background:transparent;color:#8a7a60;font-family:inherit;font-size:.72rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:all .2s;}
+.tab.on{color:#b8622a;border-bottom-color:#b8622a;font-weight:700;}
+.page{display:none;padding:12px;}
+.page.on{display:block;}
+/* CONTENT */
 .half-block{background:#fff;border:1px solid #ddd0b8;border-radius:10px;padding:12px;margin-bottom:14px;overflow-x:auto;}
 .half-title{font-size:.82rem;font-weight:700;color:#b8622a;margin-bottom:8px;}
 .legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;font-size:.65rem;color:#8a7a60;padding:8px 12px;background:#f5f0e8;border-radius:6px;}
-.saved{font-size:.65rem;color:#8a7a60;text-align:center;padding:8px;margin-bottom:8px;}
+.saved-info{font-size:.65rem;color:#8a7a60;text-align:center;padding:8px;margin-bottom:8px;}
 .loading{text-align:center;padding:50px;color:#8a7a60;font-size:.85rem;}
 .nodata{text-align:center;padding:40px 20px;color:#8a7a60;font-size:.82rem;line-height:2.2;background:#fff;border-radius:10px;border:1px solid #ddd0b8;}
-/* table styles */
+/* WEEKLY TABLE */
+.wtable{width:100%;border-collapse:separate;border-spacing:0;font-size:.72rem;margin-bottom:16px;}
+.wtable th{background:#1e1810;color:#f5f0e8;padding:7px 5px;text-align:center;font-size:.68rem;}
+.wtable th.role-col{text-align:left;padding-left:10px;background:#f5f0e8;color:#1e1810;min-width:100px;}
+.wtable td{border-bottom:1px solid #ddd0b8;padding:6px 5px;text-align:center;vertical-align:middle;}
+.wtable td.role-lbl{background:#f5f0e8;font-size:.7rem;font-weight:600;text-align:left;padding-left:10px;border-left:3px solid transparent;}
+.nchip{font-size:.65rem;padding:2px 6px;border-radius:8px;display:inline-block;white-space:nowrap;}
+.rdot{display:inline-block;width:22px;height:22px;border-radius:50%;font-size:.6rem;font-weight:700;line-height:22px;text-align:center;color:#fff;}
+.mnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.mtitle{font-size:.9rem;font-weight:700;color:#b8622a;}
+.nbtn{background:#fff;border:1px solid #ddd0b8;color:#1e1810;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;}
+/* TABLE */
 table{border-collapse:collapse;width:100%;font-size:.7rem;}
 th,td{border:1px solid #ddd0b8;text-align:center;padding:3px 2px;}
 th{background:#f5f0e8;font-weight:600;}
 @media print{
-  .hdr,.reload-btn,.legend{display:none!important;}
+  .hdr,.tabs,.reload-btn,.legend,.saved-info,.mnav{display:none!important;}
   body{background:#fff;padding:4px;}
+  .page{display:block!important;}
   .half-block{border:none;padding:4px;margin-bottom:0;page-break-after:always;}
-  .half-block:last-of-type{page-break-after:auto;}
   @page{size:A4 landscape;margin:8mm;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
 }
@@ -36,74 +54,207 @@ th{background:#f5f0e8;font-weight:600;}
 </head>
 <body>
 <div class="hdr">
-  <div>
-    <span class="logo">Cafe照</span>
-    <span class="logo-sub">出勤表</span>
-  </div>
-  <div style="text-align:right">
+  <div><span class="logo">Cafe照</span><span class="logo-sub">出勤表</span></div>
+  <div class="hdr-right">
     <button class="reload-btn" onclick="loadData()">🔄 更新</button>
     <div class="info" id="info">読み込み中...</div>
   </div>
 </div>
 
-<div class="content">
-  <div id="content"><div class="loading">📊 出勤表を読み込んでいます...</div></div>
+<div class="tabs">
+  <button class="tab on" onclick="showTab('monthly',this)">📊 月間出勤表</button>
+  <button class="tab" onclick="showTab('weekly',this)">📋 役割一覧</button>
+</div>
+
+<!-- 月間出勤表 -->
+<div class="page on" id="tab-monthly">
+  <div id="monthlyContent"><div class="loading">📊 読み込み中...</div></div>
+</div>
+
+<!-- 役割一覧 -->
+<div class="page" id="tab-weekly">
+  <div class="mnav" style="margin-top:4px">
+    <button class="nbtn" onclick="weekOff--;renderWeekly()">◀ 前週</button>
+    <div class="mtitle" id="weekTitle" style="font-size:.82rem"></div>
+    <button class="nbtn" onclick="weekOff++;renderWeekly()">次週 ▶</button>
+  </div>
+  <div id="weeklyContent"><div class="loading">📋 読み込み中...</div></div>
 </div>
 
 <script>
 const GAS='https://script.google.com/macros/s/AKfycbzVretuyWf7A5QZEdQM8D2gbHi24t_NWm5U1U00VmXqjziSNi4EWLqnBnefE9c-KjKS/exec';
 
-function show(d){
+// State
+let gasData=null;
+let weekOff=0;
+
+function showTab(name,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.getElementById('tab-'+name).classList.add('on');
+  if(btn)btn.classList.add('on');
+  if(name==='weekly'&&gasData) renderWeekly();
+}
+
+// ── 月間出勤表 ──
+function showMonthly(d){
   document.title='Cafe照 '+d.title;
-  let h='';
-  h+=`<div class="saved">📅 ${d.title}　作成日時：${d.savedAt||''}　<button onclick="window.print()" style="background:#3a8a5a;color:#fff;border:none;border-radius:5px;padding:4px 12px;font-family:inherit;font-size:.72rem;cursor:pointer">🖨 印刷</button></div>`;
+  let h=`<div class="saved-info">📅 ${d.title}　作成：${d.savedAt||''}</div>`;
   h+=`<div class="half-block"><div class="half-title">前半（1〜15日）</div>${d.half1HTML||''}</div>`;
   h+=`<div class="half-block"><div class="half-title">後半（16〜${d.daysIn||'末'}日）</div>${d.half2HTML||''}</div>`;
-  if(d.legendHTML){
-    h+=`<div class="legend">${d.legendHTML}<span style="margin-right:8px"><b style="color:#c03030">✕</b> 欠勤希望</span><span>□ 未アサイン</span></div>`;
+  if(d.legendHTML) h+=`<div class="legend">${d.legendHTML}<span style="margin-right:8px"><b style="color:#c03030">✕</b> 欠勤希望</span><span>□ 未アサイン</span></div>`;
+  document.getElementById('monthlyContent').innerHTML=h;
+}
+
+// ── 役割一覧（週間） ──
+function renderWeekly(){
+  if(!gasData) return;
+  const staff=gasData.staff||[];
+  const dayData=gasData.dayData||{};
+
+  // 週の日付を計算（curY/curMの第1週基準）
+  // viewDataからyear/monthを取得
+  const vd=gasData.viewData;
+  let baseY=new Date().getFullYear(), baseM=new Date().getMonth();
+  if(vd&&vd.title){
+    const match=vd.title.match(/(\d{4})年(\d+)月/);
+    if(match){baseY=parseInt(match[1]);baseM=parseInt(match[2])-1;}
   }
-  document.getElementById('content').innerHTML=h;
-  document.getElementById('info').textContent='更新：'+(d.savedAt||'');
+  const base=new Date(baseY,baseM,1);
+  const dow=base.getDay();
+  const mon=new Date(base);
+  mon.setDate(base.getDate()-(dow===0?6:dow-1)+weekOff*7);
+  const dates=Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});
+  const DOW=['月','火','水','木','金','土','日'];
+  const fmt=d=>`${d.getMonth()+1}/${d.getDate()}`;
+  const JP_HOL=new Set(['2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23']);
+
+  document.getElementById('weekTitle').textContent=`${dates[0].getFullYear()}年 ${fmt(dates[0])}（月）〜 ${fmt(dates[6])}（日）`;
+
+  function dk(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+  function dd(key){
+    if(!dayData[key]) return {open:true,assignments:[]};
+    const d=dayData[key];
+    if(d.open===undefined) d.open=true;
+    if(!d.assignments) d.assignments=[];
+    return d;
+  }
+  function gs(id){return staff.find(s=>s.id===id);}
+
+  // ── 役割別テーブル ──
+  const ROLES=[
+    {id:'C',name:'レジ・案内',color:'#b8622a',must:true},
+    {id:'B',name:'ドリンク・デザート',color:'#8040a0',must:true},
+    {id:'BC',name:'B+C兼務',color:'#c060c0',must:false},
+    {id:'BD',name:'B+D兼務',color:'#d06040',must:false},
+    {id:'H',name:'配膳・オーダー',color:'#1878a0',must:false},
+    {id:'D',name:'料理仕上・管理',color:'#b04040',must:true},
+    {id:'K',name:'調理メイン',color:'#2a8050',must:true},
+    {id:'P',name:'ピザ場',color:'#906020',must:true},
+    {id:'W',name:'洗い場',color:'#406090',must:false},
+    {id:'J',name:'事務作業',color:'#507050',must:false},
+    {id:'な',name:'洋食だいにんぐなかむら',color:'#8b4513',must:false},
+    {id:'は',name:'博雲堂',color:'#2060a0',must:false},
+  ];
+
+  let h='<div style="overflow-x:auto"><table class="wtable"><thead><tr><th class="role-col">役割</th>';
+  dates.forEach((d,i)=>{
+    const key=dk(d.getFullYear(),d.getMonth(),d.getDate());
+    const isH=JP_HOL.has(key),isSu=d.getDay()===0,isSa=d.getDay()===6;
+    const col=isSu||isH?'#f08080':isSa?'#80a8f0':'#f5f0e8';
+    h+=`<th style="color:${col}">${fmt(d)}<br>${DOW[i]}${isH?'<br><span style="font-size:.5rem;color:#f08080">祝</span>':''}</th>`;
+  });
+  h+='</tr></thead><tbody>';
+
+  ROLES.forEach(r=>{
+    h+=`<tr><td class="role-lbl" style="border-left-color:${r.color}">
+      <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:.72rem">${r.id}</span>
+      <span style="font-size:.62rem;color:#8a7a60;margin-left:3px">${r.name}</span>
+      ${r.must?'<span style="font-size:.52rem;background:rgba(192,48,48,.12);color:#c03030;padding:1px 4px;border-radius:2px;margin-left:3px">必須</span>':''}
+    </td>`;
+    dates.forEach(d=>{
+      const key=dk(d.getFullYear(),d.getMonth(),d.getDate());
+      const data=dd(key);
+      if(!data.open){h+=`<td style="background:#f5f0e8;color:#8a7a60;font-size:.62rem">休業</td>`;return;}
+      const a=data.assignments.find(x=>x.role===r.id);
+      if(a){
+        const s=gs(a.staffId);
+        h+=`<td><span class="nchip" style="background:${r.color}22;color:${r.color};border:1px solid ${r.color}55;font-size:.65rem">${s?s.name.split(' ')[0]:'?'}</span></td>`;
+      } else {
+        h+=`<td><span style="color:#ddd">—</span></td>`;
+      }
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+
+  // ── スタッフ別テーブル ──
+  h+=`<div style="font-size:.75rem;font-weight:700;color:#b8622a;margin:12px 0 6px">👤 スタッフ別</div>`;
+  h+=`<div style="overflow-x:auto"><table class="wtable"><thead><tr>`;
+  h+=`<th class="role-col" style="text-align:left;padding-left:10px">スタッフ</th>`;
+  dates.forEach((d,i)=>h+=`<th>${fmt(d)} ${DOW[i]}</th>`);
+  h+='</tr></thead><tbody>';
+
+  staff.forEach(s=>{
+    h+=`<tr><td style="text-align:left;padding-left:10px;font-size:.72rem;font-weight:500;background:#f5f0e8">${s.name}</td>`;
+    dates.forEach(d=>{
+      const key=dk(d.getFullYear(),d.getMonth(),d.getDate());
+      const data=dd(key);
+      if(!data.open){h+=`<td style="background:#f5f0e8;color:#8a7a60;font-size:.62rem">休業</td>`;return;}
+      const a=data.assignments.find(x=>x.staffId===s.id&&x.role);
+      if(a){
+        const ro=ROLES.find(r=>r.id===a.role);
+        h+=`<td><span class="rdot" style="background:${ro?ro.color:'#888'}">${a.role}</span></td>`;
+      } else if(s.avail&&s.avail[key]===false){
+        h+=`<td style="background:rgba(192,48,48,.08)"><span style="color:#c03030;font-weight:700">✕</span></td>`;
+      } else {
+        h+=`<td></td>`;
+      }
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+
+  document.getElementById('weeklyContent').innerHTML=h;
 }
 
-function showNoData(){
-  document.getElementById('content').innerHTML=`<div class="nodata">
-    ⚠ まだ出勤表が作成されていません。<br><br>
-    オーナーが以下の操作をすると表示されます：<br>
-    「📊 月間出勤表」タブを開く<br>↓<br>
-    「📤 出勤表を共有」ボタンをタップ<br><br>
-    その後このページを「🔄 更新」してください。
-  </div>`;
-  document.getElementById('info').textContent='データなし';
-}
-
+// ── データ読込 ──
 async function loadData(){
   document.getElementById('info').textContent='読み込み中...';
-  // ローカルキャッシュを先に表示
   try{
-    const lc=localStorage.getItem('cafeViewData');
-    if(lc){ const d=JSON.parse(lc); if(d&&d.title) show(d); }
+    const lc=localStorage.getItem('cafeViewCache');
+    if(lc){
+      gasData=JSON.parse(lc);
+      if(gasData.viewData) showMonthly(gasData.viewData);
+    }
   }catch(e){}
-  // GASから最新取得
+
   try{
     const r=await fetch(GAS+'?t='+Date.now(),{redirect:'follow',cache:'no-cache'});
     const text=await r.text();
     const start=text.indexOf('{'),end=text.lastIndexOf('}');
-    if(start<0)throw new Error('no data');
+    if(start<0) throw new Error('no data');
     const data=JSON.parse(text.slice(start,end+1));
-    if(data.viewData&&data.viewData.title){
-      localStorage.setItem('cafeViewData',JSON.stringify(data.viewData));
-      show(data.viewData);
+    if(data.staff&&data.staff.length){
+      gasData=data;
+      localStorage.setItem('cafeViewCache',JSON.stringify(data));
+      if(data.viewData) showMonthly(data.viewData);
+      else document.getElementById('monthlyContent').innerHTML=showNoData();
+      document.getElementById('info').textContent='更新完了 ✓';
     } else {
-      const lc=localStorage.getItem('cafeViewData');
-      if(!lc) showNoData();
+      if(!gasData) document.getElementById('monthlyContent').innerHTML=showNoData();
+      document.getElementById('info').textContent='データなし';
     }
   }catch(e){
-    document.getElementById('info').textContent='オフライン（キャッシュ表示）';
-    const lc=localStorage.getItem('cafeViewData');
-    if(!lc) showNoData();
+    document.getElementById('info').textContent='オフライン';
+    if(!gasData) document.getElementById('monthlyContent').innerHTML=showNoData();
   }
 }
+
+function showNoData(){
+  return `<div class="nodata">⚠ 出勤表がまだ作成されていません。<br><br>オーナーが「📊 月間出勤表」→「📤 出勤表を共有」を押すと表示されます。<br><br>その後「🔄 更新」を押してください。</div>`;
+}
+
 loadData();
 </script>
 </body>
