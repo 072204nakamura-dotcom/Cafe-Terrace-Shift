@@ -338,7 +338,38 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
     <button class="nbtn" onclick="setMonthlyView('matrix')" id="btnMatrix" style="font-size:.72rem;background:#1e1810;color:#fff;border-color:#1e1810">出勤マトリクス</button>
     <button class="nbtn" onclick="setMonthlyView('unused')" id="btnUnused" style="font-size:.72rem">未出勤スタッフ</button>
     <button class="nbtn" onclick="doPrint()" style="font-size:.72rem;background:var(--green);color:#fff;border-color:var(--green);margin-left:auto">🖨 印刷</button>
-    <button class="nbtn" onclick="savePDF()" style="font-size:.72rem;background:#2860a8;color:#fff;border-color:#2860a8">📄 PDF保存</button>
+    <button class="nbtn" onclick="showPdfGuide()" style="font-size:.72rem;background:#2060a0;color:#fff;border-color:#2060a0">📄 PDF保存</button>
+    <button class="nbtn" onclick="saveViewData()" id="shareViewBtn" style="font-size:.72rem;background:#b8622a;color:#fff;border-color:#b8622a">📤 出勤表を共有</button>
+  </div>
+  <!-- PDF操作ガイド -->
+  <div id="pdfGuide" style="display:none;background:#fff8f0;border:2px solid var(--accent);border-radius:12px;padding:14px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:.82rem;font-weight:700;color:var(--accent)">📄 PDF保存の手順</span>
+      <button onclick="document.getElementById('pdfGuide').style.display='none'" style="background:var(--surface2);border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:.9rem">✕</button>
+    </div>
+    <div style="font-size:.75rem;line-height:2;color:#1e1810">
+      <div style="background:#fff;border-radius:8px;padding:8px 12px;margin-bottom:8px;border-left:4px solid #2060a0">
+        <b>💻 PC（Windows）の場合</b><br>
+        ① 下の「印刷ダイアログを開く」ボタンをクリック<br>
+        ② プリンターの欄で <b>「Microsoft Print to PDF」</b> を選択<br>
+        ③「印刷」ボタンをクリック → 保存場所を選んで保存
+      </div>
+      <div style="background:#fff;border-radius:8px;padding:8px 12px;margin-bottom:8px;border-left:4px solid #30a060">
+        <b>🍎 Mac の場合</b><br>
+        ① 下の「印刷ダイアログを開く」ボタンをクリック<br>
+        ② 左下の <b>「PDF」</b> ボタンをクリック<br>
+        ③「PDFとして保存」を選択 → 保存
+      </div>
+      <div style="background:#fff;border-radius:8px;padding:8px 12px;border-left:4px solid #a060c0">
+        <b>📱 スマホ（iPhone/Android）の場合</b><br>
+        ① 下の「印刷ダイアログを開く」ボタンをタップ<br>
+        ② プリンターを選ぶ画面で <b>ピンチアウト（指を広げる）</b><br>
+        ③ PDF保存のオプションが表示されます
+      </div>
+    </div>
+    <button onclick="startPdfPrint()" style="background:var(--accent);border:none;color:#fff;border-radius:8px;padding:10px;width:100%;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;margin-top:10px">
+      🖨 印刷ダイアログを開く（前半・後半 各1ページ）
+    </button>
   </div>
   <div id="monthlyBody"></div>
 </div>
