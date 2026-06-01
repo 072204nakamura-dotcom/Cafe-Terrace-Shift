@@ -1273,7 +1273,7 @@ async function syncAll(){
   localStorage.setItem('cafeShift',payload);
   document.getElementById('syncSt').textContent='保存中...';
   try{
-    await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:payload});
+    await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload});
     const now=new Date().toLocaleTimeString('ja-JP');
     document.getElementById('syncSt').textContent=`保存完了 ${now} ✓`;
     localStorage.setItem('cafeShiftSavedAt',now);
@@ -1374,7 +1374,7 @@ async function saveViewData(){
     const storedPrint=localStorage.getItem('cafePrintData');
     const pd=storedPrint?JSON.parse(storedPrint):null;
     const payload=JSON.stringify({staff,dayData,lineHistory,printData:pd,viewData});
-    await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:payload});
+    await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload});
     btn.textContent='✓ 共有しました！';
     const viewUrl=location.href.substring(0,location.href.lastIndexOf('/'))+'/cafe-view.html';
     setTimeout(()=>{
@@ -1566,7 +1566,7 @@ async function printMonthly(){
     const storedPrint=localStorage.getItem('cafePrintData');
     const pd=storedPrint?JSON.parse(storedPrint):null;
     const payload=JSON.stringify({staff,dayData,lineHistory,printData:pd});
-    await fetch(GAS_URL,{method:'POST',headers:{'Content-Type':'text/plain'},redirect:'follow',body:payload});
+    await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload});
     if(btn){ btn.textContent='✓ 共有用を更新しました！'; }
     setTimeout(()=>{
       if(btn){ btn.textContent='🖨 印刷・PDF'; btn.disabled=false; }
