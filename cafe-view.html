@@ -96,13 +96,75 @@ function showTab(name,btn){
   if(name==='weekly'&&gasData) renderWeekly();
 }
 
-// ── 月間出勤表 ──
+const VIEW_ROLES=[
+  {id:'C',name:'レジ・案内',color:'#b8622a'},{id:'B',name:'ドリンク・デザート',color:'#8040a0'},
+  {id:'BC',name:'B+C兼務',color:'#c060c0'},{id:'BD',name:'B+D兼務',color:'#d06040'},
+  {id:'H',name:'配膳・オーダー',color:'#1878a0'},{id:'D',name:'料理仕上・管理',color:'#b04040'},
+  {id:'K',name:'調理メイン',color:'#2a8050'},{id:'P',name:'ピザ場',color:'#906020'},
+  {id:'W',name:'洗い場',color:'#406090'},{id:'J',name:'事務作業',color:'#507050'},
+  {id:'な',name:'洋食だいにんぐなかむら',color:'#8b4513'},{id:'は',name:'博雲堂',color:'#2060a0'},
+];
+const VIEW_HOL=new Set(['2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23']);
+const VIEW_DOW=['日','月','火','水','木','金','土'];
+
+function vdk(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+function vdd(dayData,key){const x=dayData[key]; if(!x)return{open:true,assignments:[]}; return {open:x.open!==false, assignments:x.assignments||[]};}
+function vAvail(s,key){ if(s.avail&&s.avail[key]===false) return false; return true; }
+
+function buildHalfView(staff,dayData,y,m,fromDay,toDay){
+  const daysIn=new Date(y,m+1,0).getDate();
+  const endDay=Math.min(toDay,daysIn);
+  let h='<table><thead><tr><th style="text-align:left;min-width:80px">スタッフ</th>';
+  for(let d=fromDay;d<=endDay;d++){
+    const key=vdk(y,m,d),dow=new Date(y,m,d).getDay(),isH=VIEW_HOL.has(key);
+    const col=dow===0||isH?'#c03030':dow===6?'#2860a8':'#1e1810';
+    const bg=!vdd(dayData,key).open?'#eee':'#f5f0e8';
+    h+=`<th style="color:${col};background:${bg};min-width:30px;font-size:9pt">${d}<br><span style="font-size:7pt">${VIEW_DOW[dow]}${isH?'祝':''}</span></th>`;
+  }
+  h+='<th style="background:#f5f0e8">合計</th></tr></thead><tbody>';
+  staff.forEach(s=>{
+    let rt=0;
+    h+=`<tr><td style="text-align:left;padding:3px 6px;font-weight:500;background:#f5f0e8;white-space:nowrap;font-size:9pt">${s.name}</td>`;
+    for(let d=fromDay;d<=endDay;d++){
+      const key=vdk(y,m,d),data=vdd(dayData,key);
+      const asgn=data.assignments.find(a=>a.staffId===s.id&&a.role);
+      let cell='',bg='';
+      if(!data.open){bg='#f0f0f0';}
+      else if(asgn){rt++;const ro=VIEW_ROLES.find(r=>r.id===asgn.role);bg=ro?ro.color+'55':'#3a8a5a4d';cell=`<b style="color:${ro?ro.color:'#3a8a5a'};font-size:10pt">${asgn.role}</b>`;}
+      else if(!vAvail(s,key)){bg='rgba(200,48,48,.18)';cell='<b style="color:#c03030;font-size:11pt">✕</b>';}
+      h+=`<td style="background:${bg};text-align:center;padding:2px">${cell}</td>`;
+    }
+    h+=`<td style="text-align:center;font-weight:700;color:#3a8a5a;background:#f5f0e8;font-size:9pt">${rt}</td></tr>`;
+  });
+  h+='<tr style="background:#1e1810"><td style="color:#f5f0e8;padding:3px 6px;font-size:8pt">出勤人数</td>';
+  for(let d=fromDay;d<=endDay;d++){
+    const key=vdk(y,m,d),data=vdd(dayData,key);
+    if(!data.open){h+='<td style="color:#555;border:1px solid #333">—</td>';continue;}
+    const cnt=data.assignments.filter(a=>a.role).length;
+    const col=cnt>=4?'#7ff0a0':cnt>=2?'#f0c87f':'#f08080';
+    h+=`<td style="color:${col};font-weight:700;border:1px solid #333;font-size:9pt">${cnt}</td>`;
+  }
+  h+='<td style="border:1px solid #333"></td></tr></tbody></table>';
+  return h;
+}
+
+// ── 月間出勤表（元データから組み立て） ──
 function showMonthly(d){
-  document.title='Cafe照 '+d.title;
-  let h=`<div class="saved-info">📅 ${d.title}　作成：${d.savedAt||''}</div>`;
-  h+=`<div class="half-block"><div class="half-title">前半（1〜15日）</div>${d.half1HTML||''}</div>`;
-  h+=`<div class="half-block"><div class="half-title">後半（16〜${d.daysIn||'末'}日）</div>${d.half2HTML||''}</div>`;
-  if(d.legendHTML) h+=`<div class="legend">${d.legendHTML}<span style="margin-right:8px"><b style="color:#c03030">✕</b> 欠勤希望</span><span>□ 未アサイン</span></div>`;
+  document.title='Cafe照 '+(d.title||'出勤表');
+  const staff=(gasData&&gasData.staff)||[];
+  const dayData=(gasData&&gasData.dayData)||{};
+  // 月の取得：viewDataにyear/monthがあれば使う、なければtitleから
+  let y=d.year, m=d.month;
+  if(y===undefined||m===undefined){
+    const mt=(d.title||'').match(/(\d{4})年(\d+)月/);
+    if(mt){y=parseInt(mt[1]);m=parseInt(mt[2])-1;}else{const n=new Date();y=n.getFullYear();m=n.getMonth();}
+  }
+  const daysIn=d.daysIn||new Date(y,m+1,0).getDate();
+  const legend=VIEW_ROLES.map(r=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px"><span style="display:inline-block;width:16px;height:14px;border-radius:2px;background:${r.color}44;color:${r.color};font-weight:700;text-align:center;font-size:7pt;line-height:14px">${r.id}</span>${r.name}</span>`).join('');
+  let h=`<div class="saved-info">📅 ${d.title||''}　作成：${d.savedAt||''}</div>`;
+  h+=`<div class="half-block"><div class="half-title">前半（1〜15日）</div>${buildHalfView(staff,dayData,y,m,1,15)}</div>`;
+  h+=`<div class="half-block"><div class="half-title">後半（16〜${daysIn}日）</div>${buildHalfView(staff,dayData,y,m,16,daysIn)}</div>`;
+  h+=`<div class="legend">${legend}<span style="margin-right:8px"><b style="color:#c03030">✕</b> 欠勤希望</span><span>□ 未アサイン</span></div>`;
   document.getElementById('monthlyContent').innerHTML=h;
 }
 
