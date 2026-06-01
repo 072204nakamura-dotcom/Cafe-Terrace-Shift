@@ -236,7 +236,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 <body>
 
 <div class="hdr">
-  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span></div>
+  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v2</span></div>
   <div style="text-align:right">
     <button class="sync-btn" onclick="syncAll()">☁ 保存・共有</button>
     <div class="sync-st" id="syncSt">未保存</div>
@@ -1273,11 +1273,27 @@ async function syncAll(){
   localStorage.setItem('cafeShift',payload);
   document.getElementById('syncSt').textContent='保存中...';
   try{
+    // no-corsで保存（GitHub→GASの正しい方式）
     await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload});
+    // 保存後に読み戻して本当に保存できたか確認
+    await new Promise(r=>setTimeout(r,1500));
+    let verified=false;
+    try{
+      const chk=await fetch(GAS_URL+'?t='+Date.now(),{redirect:'follow',cache:'no-cache'});
+      const txt=await chk.text();
+      const js=txt.slice(txt.indexOf('{'),txt.lastIndexOf('}')+1);
+      const d=JSON.parse(js);
+      verified = d.staff && d.staff.length>0;
+    }catch(e){}
     const now=new Date().toLocaleTimeString('ja-JP');
-    document.getElementById('syncSt').textContent=`保存完了 ${now} ✓`;
-    localStorage.setItem('cafeShiftSavedAt',now);
-    alert('✓ 保存しました！');
+    if(verified){
+      document.getElementById('syncSt').textContent=`保存完了 ${now} ✓`;
+      localStorage.setItem('cafeShiftSavedAt',now);
+      alert('✓ クラウドに保存できました！（確認済み）');
+    }else{
+      document.getElementById('syncSt').textContent=`保存…確認できず`;
+      alert('⚠ 送信しましたが、保存の確認ができませんでした。\nGASのデプロイ設定（アクセス：全員）と再デプロイをご確認ください。');
+    }
   }catch(e){
     document.getElementById('syncSt').textContent='ローカルのみ保存';
     alert('⚠ GASへの保存に失敗しました。\nローカルには保存しました。\nエラー: '+e.message);
