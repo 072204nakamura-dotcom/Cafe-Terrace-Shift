@@ -236,7 +236,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 <body>
 
 <div class="hdr">
-  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v2</span></div>
+  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v3</span></div>
   <div style="text-align:right">
     <button class="sync-btn" onclick="syncAll()">☁ 保存・共有</button>
     <div class="sync-st" id="syncSt">未保存</div>
@@ -1269,7 +1269,10 @@ async function syncAll(){
     const storedPrint=localStorage.getItem('cafePrintData');
     if(storedPrint) printData=JSON.parse(storedPrint);
   }catch(e){}
-  const payload=JSON.stringify({staff,dayData,lineHistory,printData});
+  // 出勤表の表示データも一緒に保存（cafe-view.html用）
+  let viewData=null;
+  try{ viewData=buildViewData(); localStorage.setItem('cafeViewData',JSON.stringify(viewData)); }catch(e){}
+  const payload=JSON.stringify({staff,dayData,lineHistory,printData,viewData});
   localStorage.setItem('cafeShift',payload);
   document.getElementById('syncSt').textContent='保存中...';
   try{
@@ -1364,25 +1367,20 @@ function doPrint(){
   },300);
 }
 
-async function saveViewData(){
-  const btn=document.getElementById('shareViewBtn');
-  btn.textContent='⏳ 保存中...';btn.disabled=true;
-
-  // 前半・後半のHTMLを生成
+function buildViewData(){
   const y=curY,m=curM,daysIn=new Date(y,m+1,0).getDate();
   const title=`${y}年${m+1}月　出勤表`;
   const half1=buildHalfTable(y,m,1,15);
   const half2=buildHalfTable(y,m,16,daysIn);
   const legend=ROLES.map(r=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px"><span style="display:inline-block;width:16px;height:14px;border-radius:2px;background:${r.color}44;color:${r.color};font-weight:700;text-align:center;font-size:7pt;line-height:14px">${r.id}</span>${r.name}</span>`).join('');
+  return {title,half1HTML:half1,half2HTML:half2,legendHTML:legend,daysIn,savedAt:new Date().toLocaleString('ja-JP')};
+}
 
-  const viewData={
-    title,
-    half1HTML:half1,
-    half2HTML:half2,
-    legendHTML:legend,
-    daysIn,
-    savedAt:new Date().toLocaleString('ja-JP')
-  };
+async function saveViewData(){
+  const btn=document.getElementById('shareViewBtn');
+  btn.textContent='⏳ 保存中...';btn.disabled=true;
+
+  const viewData=buildViewData();
 
   // GASに保存
   try{
