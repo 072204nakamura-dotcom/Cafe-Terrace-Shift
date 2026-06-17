@@ -236,7 +236,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 <body>
 
 <div class="hdr">
-  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v4</span></div>
+  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v5</span></div>
   <div style="text-align:right">
     <button class="sync-btn" onclick="syncAll()">☁ 保存・共有</button>
     <div class="sync-st" id="syncSt">未保存</div>
@@ -471,6 +471,14 @@ function dd(key){
   return dayData[key];
 }
 function isAvail(s,key){return s.avail[key]!==false;}
+// 欠勤希望にする時、その日の役割割り当ても外す（✕が役割で隠れないように）
+function markOff(staffId,key){
+  const s=gs(staffId); if(!s)return;
+  s.avail[key]=false;
+  if(dayData[key]&&dayData[key].assignments){
+    dayData[key].assignments=dayData[key].assignments.filter(a=>a.staffId!==staffId);
+  }
+}
 function isWkHol(key){const d=new Date(key);return d.getDay()===0||d.getDay()===6||JP_HOL.has(key);}
 function toNum(s){return parseInt(s.replace(/[１-９０]/g,c=>String.fromCharCode(c.charCodeAt(0)-65248)));}
 function effFrom(s,key){const a=dd(key).assignments.find(x=>x.staffId===s.id);return (a&&a.timeFrom)||s.defFrom||'09:00';}
@@ -944,7 +952,7 @@ function parseLine(){
   });
   if(!unav.size){res.innerHTML='<div class="pres terr">⚠ 日付が読み取れませんでした。<br>「5日、13日」のように日付を含む形式で入力してください。</div>';return;}
   const unavArr=[...unav].sort((a,b)=>a-b);
-  unavArr.forEach(d=>{s.avail[dk(y,curM,d)]=false;});
+  unavArr.forEach(d=>{markOff(s.id,dk(y,curM,d));});
   saveHistory(s.id, s.name, unavArr, document.getElementById('pasteTxt').value.trim());
   renderCal();
   res.innerHTML=`<div class="pres"><span class="tok">✓ ${s.name}さんの欠勤日を登録・保存しました</span><br>欠勤：<span style="color:var(--red)">${unavArr.join('・')}日</span><br><span style="font-size:.65rem;color:var(--muted)">📂 欠勤履歴タブで確認できます</span></div>`;
@@ -1056,7 +1064,7 @@ function reApply(staffId, hk){
   if(!s){ alert('スタッフが見つかりません'); return; }
   const parts = hk.split('-');
   const y=parseInt(parts[0]), m=parseInt(parts[1])-1;
-  rec.dates.forEach(d => { s.avail[dk(y,m,d)] = false; });
+  rec.dates.forEach(d => { markOff(s.id,dk(y,m,d)); });
   renderCal();
   alert(`✓ ${rec.name}さんの欠勤日をカレンダーに反映しました`);
 }
@@ -1132,15 +1140,24 @@ function buildAvailCal(s){
 function toggleAvail(staffId,key,el){
   const s=gs(staffId);if(!s)return;
   const cur=isAvail(s,key);
-  s.avail[key]=!cur;
-  if(!cur){el.className=`acal-day avail ${el.className.includes('su')?'su':el.className.includes('sa')?'sa':''}`;}
-  else{el.className=`acal-day unavail ${el.className.includes('su')?'su':el.className.includes('sa')?'sa':''}`;}
+  if(cur){
+    // 出勤可→欠勤希望に変更：役割割り当ても外す
+    markOff(staffId,key);
+    el.className=`acal-day unavail ${el.className.includes('su')?'su':el.className.includes('sa')?'sa':''}`;
+  }else{
+    // 欠勤希望→出勤可に戻す
+    s.avail[key]=true;
+    el.className=`acal-day avail ${el.className.includes('su')?'su':el.className.includes('sa')?'sa':''}`;
+  }
   renderCal();
 }
 function setAllAvail(staffId,val){
   const s=gs(staffId);if(!s)return;
   const n=new Date(curY,curM+1,0).getDate();
-  for(let d=1;d<=n;d++) s.avail[dk(curY,curM,d)]=val;
+  for(let d=1;d<=n;d++){
+    const key=dk(curY,curM,d);
+    if(val===false){ markOff(staffId,key); } else { s.avail[key]=true; }
+  }
   const el=document.getElementById('avail-'+staffId);
   if(el) el.outerHTML=buildAvailCal(s);
   renderCal();
