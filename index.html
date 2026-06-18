@@ -236,7 +236,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 <body>
 
 <div class="hdr">
-  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v5</span></div>
+  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v7</span></div>
   <div style="text-align:right">
     <button class="sync-btn" onclick="syncAll()">☁ 保存・共有</button>
     <div class="sync-st" id="syncSt">未保存</div>
@@ -1289,7 +1289,7 @@ async function syncAll(){
   // 出勤表の表示データも一緒に保存（cafe-view.html用）
   let viewData=null;
   try{ viewData=buildViewData(); localStorage.setItem('cafeViewData',JSON.stringify(viewData)); }catch(e){}
-  const payload=JSON.stringify({staff,dayData,lineHistory,printData,viewData});
+  const payload=buildCloudPayload({viewData});
   localStorage.setItem('cafeShift',payload);
   document.getElementById('syncSt').textContent='保存中...';
   try{
@@ -1346,11 +1346,19 @@ async function loadFromGas(){
     const js=text.slice(text.indexOf('{'),text.lastIndexOf('}')+1);
     const d=JSON.parse(js);
     if(d.staff&&d.staff.length){
-      staff=d.staff.map(applyDefaults);
+      // スタッフをマージ：クラウド優先だが、availはローカルの欠勤情報も残す（クラウドが間引いた月の分を保持）
+      const localStaff=staff;
+      staff=d.staff.map(cs=>{
+        const merged=applyDefaults(cs);
+        const ls=localStaff.find(x=>x.id===cs.id);
+        if(ls&&ls.avail){ merged.avail=Object.assign({}, ls.avail, merged.avail||{}); }
+        return merged;
+      });
       if(d.lineHistory) lineHistory=d.lineHistory;
       nextId=Math.max(...staff.map(s=>s.id))+1;
       if(d.dayData){
-        dayData=d.dayData;
+        // クラウドのデータで更新するが、ローカルにしかない日付（クラウドが間引いた月）は残す
+        dayData=Object.assign({}, dayData, d.dayData);
         Object.keys(dayData).forEach(k=>{if(dayData[k].open===undefined)dayData[k].open=true;});
       }
       localStorage.setItem('cafeShift',JSON.stringify({staff,dayData}));
@@ -1384,6 +1392,33 @@ function doPrint(){
   },300);
 }
 
+function buildCloudPayload(extra){
+  // 容量削減：直近の月だけ保存（現在月の-2〜+3ヶ月）＋ null項目を除去
+  const lo=new Date(curY,curM-2,1), hi=new Date(curY,curM+4,0);
+  const inWin=key=>{const dt=new Date(key); return dt>=lo&&dt<=hi;};
+  const keepDay={};
+  for(const key in dayData){
+    if(!inWin(key)) continue;
+    const d=dayData[key];
+    const asgn=(d.assignments||[]).filter(a=>a.role).map(a=>{
+      const o={staffId:a.staffId,role:a.role};
+      if(a.timeFrom) o.timeFrom=a.timeFrom;
+      if(a.timeTo) o.timeTo=a.timeTo;
+      return o;
+    });
+    const day={assignments:asgn};
+    if(d.open===false) day.open=false; // openはtrueなら省略（読込時にtrue補完）
+    keepDay[key]=day;
+  }
+  const slimStaff=staff.map(s=>{
+    const av={};
+    if(s.avail){ for(const k in s.avail){ if(s.avail[k]===false && inWin(k)) av[k]=false; } }
+    return Object.assign({},s,{avail:av});
+  });
+  const base={staff:slimStaff,dayData:keepDay,lineHistory};
+  return JSON.stringify(Object.assign(base, extra||{}));
+}
+
 function buildViewData(){
   // HTMLは保存しない（5万文字制限対策）。月情報だけ保存し、cafe-view側で表を組み立てる
   const y=curY,m=curM,daysIn=new Date(y,m+1,0).getDate();
@@ -1401,7 +1436,7 @@ async function saveViewData(){
     localStorage.setItem('cafeViewData', JSON.stringify(viewData));
     const storedPrint=localStorage.getItem('cafePrintData');
     const pd=storedPrint?JSON.parse(storedPrint):null;
-    const payload=JSON.stringify({staff,dayData,lineHistory,printData:pd,viewData});
+    const payload=buildCloudPayload({viewData});
     await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload});
     btn.textContent='✓ 共有しました！';
     const viewUrl=location.href.substring(0,location.href.lastIndexOf('/'))+'/cafe-view.html';
@@ -1593,7 +1628,7 @@ async function printMonthly(){
   try{
     const storedPrint=localStorage.getItem('cafePrintData');
     const pd=storedPrint?JSON.parse(storedPrint):null;
-    const payload=JSON.stringify({staff,dayData,lineHistory,printData:pd});
+    const payload=buildCloudPayload({});
     await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload});
     if(btn){ btn.textContent='✓ 共有用を更新しました！'; }
     setTimeout(()=>{
