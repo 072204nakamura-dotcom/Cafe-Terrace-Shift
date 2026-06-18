@@ -236,7 +236,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 <body>
 
 <div class="hdr">
-  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v7</span></div>
+  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v8</span></div>
   <div style="text-align:right">
     <button class="sync-btn" onclick="syncAll()">☁ 保存・共有</button>
     <div class="sync-st" id="syncSt">未保存</div>
@@ -1357,8 +1357,17 @@ async function loadFromGas(){
       if(d.lineHistory) lineHistory=d.lineHistory;
       nextId=Math.max(...staff.map(s=>s.id))+1;
       if(d.dayData){
-        // クラウドのデータで更新するが、ローカルにしかない日付（クラウドが間引いた月）は残す
-        dayData=Object.assign({}, dayData, d.dayData);
+        // スマートマージ：クラウドに役割割当があるか、ローカルに割当が無ければクラウド優先。
+        // ローカルに割当があってクラウドが空ならローカルを残す（保存失敗で未送信のデータを守る）
+        const merged=Object.assign({}, dayData);
+        for(const k in d.dayData){
+          const cd=d.dayData[k];
+          const ld=merged[k];
+          const cloudHas=(cd.assignments||[]).some(a=>a.role);
+          const localHas=ld&&(ld.assignments||[]).some(a=>a.role);
+          if(cloudHas || !localHas){ merged[k]=cd; }
+        }
+        dayData=merged;
         Object.keys(dayData).forEach(k=>{if(dayData[k].open===undefined)dayData[k].open=true;});
       }
       localStorage.setItem('cafeShift',JSON.stringify({staff,dayData}));
