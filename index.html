@@ -111,6 +111,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 .tovlbl{font-size:.6rem;color:var(--muted);}
 .tovinput{font-size:.68rem;font-family:'DM Mono',monospace;border:1px solid var(--border);border-radius:4px;padding:2px 5px;background:#fff;color:#1e1810;width:68px;}
 .rsel{font-size:.72rem;font-family:inherit;background:#fff;border:1px solid var(--border);border-radius:5px;padding:4px 5px;color:#1e1810;cursor:pointer;min-width:110px;}
+.day-cost{font-size:.6rem;color:#a8740f;font-weight:700;margin-top:3px;font-family:'DM Mono',monospace;}
+.mcost{background:rgba(168,116,15,.1);border:1px solid rgba(168,116,15,.3);border-radius:6px;padding:8px 11px;font-size:.82rem;font-weight:700;color:#a8740f;margin-top:8px;}
 .malert{background:rgba(192,48,48,.08);border:1px solid rgba(192,48,48,.25);border-radius:6px;padding:7px 10px;font-size:.72rem;color:var(--red);margin-top:6px;}
 .mwarn{background:rgba(192,128,32,.08);border:1px solid rgba(192,128,32,.25);border-radius:6px;padding:7px 10px;font-size:.72rem;color:var(--yellow);margin-top:5px;}
 
@@ -200,6 +202,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
   .hdr,.tabs,.ov,
   .nbtn,#pdfGuide,
   #btnMatrix,#btnUnused{display:none!important;}
+  /* 人件費は印刷・PDFに出さない */
+  .lc-row,.lc-cell,.day-cost,.mcost{display:none!important;}
   /* print-targetクラスのページのみ表示 */
   .page{display:none!important;}
   .page.print-target{display:block!important;}
@@ -236,7 +240,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 <body>
 
 <div class="hdr">
-  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v8</span></div>
+  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v9</span></div>
   <div style="text-align:right">
     <button class="sync-btn" onclick="syncAll()">☁ 保存・共有</button>
     <div class="sync-st" id="syncSt">未保存</div>
@@ -483,6 +487,24 @@ function isWkHol(key){const d=new Date(key);return d.getDay()===0||d.getDay()===
 function toNum(s){return parseInt(s.replace(/[１-９０]/g,c=>String.fromCharCode(c.charCodeAt(0)-65248)));}
 function effFrom(s,key){const a=dd(key).assignments.find(x=>x.staffId===s.id);return (a&&a.timeFrom)||s.defFrom||'09:00';}
 function effTo(s,key){const a=dd(key).assignments.find(x=>x.staffId===s.id);return (a&&a.timeTo)||s.defTo||'17:00';}
+const HOURLY_WAGE=1085;
+function workHours(from,to){
+  if(!from||!to) return 0;
+  const tm=t=>{const p=String(t).split(':');return (parseInt(p[0])||0)*60+(parseInt(p[1])||0);};
+  let mins=tm(to)-tm(from);
+  if(mins<0) mins+=24*60;
+  return mins/60;
+}
+function dayLaborCost(key){
+  const data=dd(key);
+  if(!data.open) return 0;
+  let cost=0;
+  data.assignments.filter(a=>a.role).forEach(a=>{
+    const s=gs(a.staffId); if(!s) return;
+    cost += workHours(effFrom(s,key),effTo(s,key))*HOURLY_WAGE;
+  });
+  return Math.round(cost);
+}
 function staffOnDay(key){return dd(key).assignments.filter(a=>a.role).map(a=>({...a,s:gs(a.staffId)})).filter(x=>x.s);}
 function checkRoles(key,dow){
   const covered=new Set(staffOnDay(key).map(a=>a.role));
@@ -603,6 +625,8 @@ function renderCal(){
       if(isMiss) h+=`<div class="alert">⚠ ${missing.join('・')}不足</div>`;
       if(!isMiss&&warnRoles.length) h+=`<div class="warn">△ ${warnRoles.join('・')}不足</div>`;
       if(tIss.length) h+=`<div class="warn">⏰ ${tIss[0]}</div>`;
+      const _dc=dayLaborCost(key);
+      if(_dc>0) h+=`<div class="day-cost">💰¥${_dc.toLocaleString()}</div>`;
     } else {
       h+=`<div style="font-size:.6rem;color:var(--muted);margin-top:6px">出勤可:${avail.length}人</div>`;
     }
@@ -722,6 +746,9 @@ function renderModalBody(key,d,dow){
   if(missing.length) h+=`<div class="malert">⚠ 必須ポジション不足：${missing.map(r=>ROLES.find(x=>x.id===r)?.name||r).join('・')}</div>`;
   if(warnRoles.length) h+=`<div class="mwarn">△ ${warnRoles.join('・')}が未配置です</div>`;
   if(tIss.length) h+=`<div class="mwarn">⏰ ${tIss.join(' / ')}</div>`;
+
+  const _cost=dayLaborCost(key);
+  h+=`<div class="mcost">💰 この日の人件費：¥${_cost.toLocaleString()}　<span style="font-size:.62rem;color:var(--muted)">（時給¥1,085・休憩なし）</span></div>`;
 
   document.getElementById('modalBody').innerHTML=h;
 }
@@ -1782,7 +1809,25 @@ function renderMonthlyMatrix(y,m,daysIn){
   h+=`<td style="border:1px solid #333;text-align:center;color:#f5f0e8;font-family:'DM Mono',monospace">${staff.reduce((s2,s)=>s2+countDays(s.id),0)}</td>`;
   h+=`</tr>`;
 
+  // 人件費行（印刷では非表示：lc-row）
+  let monthCost=0;
+  h+=`<tr class="lc-row" style="background:#2a2018">`;
+  h+=`<td style="padding:5px 8px;color:#ffd9a0;font-weight:700;position:sticky;left:0;background:#2a2018;border:1px solid #333;white-space:nowrap">💰人件費</td>`;
+  for(let d=1;d<=daysIn;d++){
+    const key=dk(y,m,d);
+    const data=dd(key);
+    if(!data.open){h+=`<td class="lc-cell" style="border:1px solid #333;text-align:center;color:#555">—</td>`;continue;}
+    const dc=dayLaborCost(key);
+    monthCost+=dc;
+    h+=`<td class="lc-cell" style="text-align:center;border:1px solid #333;color:#ffd9a0;font-family:'DM Mono',monospace;font-size:.52rem;white-space:nowrap">${dc>0?('¥'+dc.toLocaleString()):'-'}</td>`;
+  }
+  h+=`<td class="lc-cell" style="border:1px solid #333;text-align:center;color:#ffd9a0;font-family:'DM Mono',monospace;font-weight:700;font-size:.6rem;white-space:nowrap">¥${monthCost.toLocaleString()}</td>`;
+  h+=`</tr>`;
+
   h+=`</tbody></table></div>`;
+
+  // 月間人件費サマリー（印刷では非表示）
+  h+=`<div class="lc-row" style="background:#2a2018;color:#ffd9a0;border-radius:10px;padding:12px 16px;margin-top:12px;font-weight:700">💰 ${m+1}月の人件費合計：¥${monthCost.toLocaleString()}　<span style="font-size:.66rem;color:#caa06a;font-weight:400">（時給¥1,085・休憩なし／出勤時間が未入力の人は9:00〜17:00で計算）</span></div>`;
 
   // 凡例
   h+=`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:.65rem;color:var(--muted)">`;
