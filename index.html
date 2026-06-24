@@ -241,7 +241,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 <body>
 
 <div class="hdr">
-  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v10</span></div>
+  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v11</span></div>
   <div style="text-align:right">
     <button class="sync-btn" onclick="syncAll()">💾 保存</button>
     <button class="sync-btn load-btn" onclick="loadFromCloudBtn()">☁ 読み込み</button>
@@ -648,7 +648,7 @@ function renderCal(){
     <div class="icard"><div class="lbl">スタッフ</div><div class="val">${staff.length}</div></div>`;
 }
 
-function toggleOpen(key){dd(key).open=!dd(key).open;renderCal();}
+function toggleOpen(key){dd(key).open=!dd(key).open;refreshViews();}
 
 // ============================================================
 // MODAL
@@ -785,6 +785,14 @@ function buildGantt(key){
   return h;
 }
 
+function refreshViews(){
+  renderCal();
+  // 月間出勤表が一度でも描画済みなら一緒に更新（編集が即反映されるように）
+  try{
+    const mb=document.getElementById('monthlyBody');
+    if(mb && mb.innerHTML.trim().length>0 && typeof renderMonthly==='function') renderMonthly();
+  }catch(e){}
+}
 function setRole(key,staffId,role){
   const data=dd(key);
   if(!role){
@@ -800,14 +808,14 @@ function setRole(key,staffId,role){
   // ガントチャートを更新
   const ganttEl=document.querySelector('.gantt');
   if(ganttEl){ganttEl.outerHTML=buildGantt(key);}
-  renderCal();
+  refreshViews();
 }
 function setTime(key,staffId,field,val){
   const data=dd(key);
   let a=data.assignments.find(x=>x.staffId===staffId);
   if(!a){a={staffId,role:'',timeFrom:null,timeTo:null};data.assignments.push(a);}
   a[field]=val;
-  renderCal();
+  refreshViews();
 }
 function toggleDayPref(key,rid,btn){
   const data=dd(key);if(!data.prefRoles)data.prefRoles=[];
@@ -1180,7 +1188,7 @@ function toggleAvail(staffId,key,el){
     s.avail[key]=true;
     el.className=`acal-day avail ${el.className.includes('su')?'su':el.className.includes('sa')?'sa':''}`;
   }
-  renderCal();
+  refreshViews();
 }
 function setAllAvail(staffId,val){
   const s=gs(staffId);if(!s)return;
@@ -1191,7 +1199,7 @@ function setAllAvail(staffId,val){
   }
   const el=document.getElementById('avail-'+staffId);
   if(el) el.outerHTML=buildAvailCal(s);
-  renderCal();
+  refreshViews();
 }
 function clearAvail(staffId){
   const s=gs(staffId);if(!s)return;
