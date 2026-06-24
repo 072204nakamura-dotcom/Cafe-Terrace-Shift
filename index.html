@@ -18,6 +18,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 .logo{font-size:1.2rem;font-weight:700;color:#e8a060;}
 .logo span{font-size:0.65rem;color:#8a7a60;margin-left:6px;letter-spacing:.1em;}
 .sync-btn{background:var(--green);border:none;color:#fff;padding:7px 14px;border-radius:7px;font-size:0.78rem;font-family:inherit;cursor:pointer;}
+.load-btn{background:#3a6ea5;margin-left:6px;}
 .sync-st{font-size:0.6rem;color:#8a7a60;text-align:right;margin-top:2px;}
 
 /* TABS */
@@ -240,9 +241,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 <body>
 
 <div class="hdr">
-  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v9</span></div>
+  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v10</span></div>
   <div style="text-align:right">
-    <button class="sync-btn" onclick="syncAll()">☁ 保存・共有</button>
+    <button class="sync-btn" onclick="syncAll()">💾 保存</button>
+    <button class="sync-btn load-btn" onclick="loadFromCloudBtn()">☁ 読み込み</button>
     <div class="sync-st" id="syncSt">未保存</div>
   </div>
 </div>
@@ -384,7 +386,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
     <div class="stitle">☁ Google スプレッドシート連携</div>
     <div style="background:rgba(58,138,90,.1);border:1px solid rgba(58,138,90,.3);border-radius:8px;padding:10px;font-size:.78rem;line-height:1.8">
       <span style="color:var(--green);font-weight:700">✓ 接続済み</span><br>
-      右上「☁ 保存・共有」でデータを保存・共有できます。
+      右上「💾 保存」でクラウドに保存、「☁ 読み込み」でクラウドから取得できます。
     </div>
     <div id="gasSt" style="font-size:.68rem;color:var(--muted);margin-top:6px"></div>
     <button class="savebtn" style="margin-top:8px" onclick="testGas()">接続テスト</button>
@@ -498,8 +500,10 @@ function workHours(from,to){
 function dayLaborCost(key){
   const data=dd(key);
   if(!data.open) return 0;
+  const NO_WAGE=['J','な','は']; // 事務作業・洋食だいにんぐなかむら・博雲堂は人件費計算しない
   let cost=0;
   data.assignments.filter(a=>a.role).forEach(a=>{
+    if(NO_WAGE.includes(a.role)) return;
     const s=gs(a.staffId); if(!s) return;
     cost += workHours(effFrom(s,key),effTo(s,key))*HOURLY_WAGE;
   });
@@ -1364,6 +1368,11 @@ function loadLocal(){
     return !!d.staff;
   }catch(e){return false;}
 }
+async function loadFromCloudBtn(){
+  if(!confirm('☁ クラウドから読み込みます。\n\n今この画面で編集した未保存の変更は、クラウドの内容で上書きされる場合があります。\n（先に「💾 保存」しておくと安全です）\n\n読み込みますか？')) return;
+  await loadFromGas();
+  alert('☁ クラウドから読み込みました。');
+}
 async function loadFromGas(){
   loadLocal();renderCal();updatePasteStaff();
   document.getElementById('syncSt').textContent='読込中...';
@@ -1827,7 +1836,7 @@ function renderMonthlyMatrix(y,m,daysIn){
   h+=`</tbody></table></div>`;
 
   // 月間人件費サマリー（印刷では非表示）
-  h+=`<div class="lc-row" style="background:#2a2018;color:#ffd9a0;border-radius:10px;padding:12px 16px;margin-top:12px;font-weight:700">💰 ${m+1}月の人件費合計：¥${monthCost.toLocaleString()}　<span style="font-size:.66rem;color:#caa06a;font-weight:400">（時給¥1,085・休憩なし／出勤時間が未入力の人は9:00〜17:00で計算）</span></div>`;
+  h+=`<div class="lc-row" style="background:#2a2018;color:#ffd9a0;border-radius:10px;padding:12px 16px;margin-top:12px;font-weight:700">💰 ${m+1}月の人件費合計：¥${monthCost.toLocaleString()}　<span style="font-size:.66rem;color:#caa06a;font-weight:400">（時給¥1,085・休憩なし／J事務・な・はは計算対象外／時間未入力は9:00〜17:00で計算）</span></div>`;
 
   // 凡例
   h+=`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:.65rem;color:var(--muted)">`;
@@ -1935,7 +1944,8 @@ function showPage(name,btn){
 // Init
 const tmr=new Date();tmr.setDate(tmr.getDate()+1);
 document.getElementById('noticeDate').value=tmr.toISOString().slice(0,10);
-loadFromGas();
+loadLocal();renderCal();updatePasteStaff();
+document.getElementById('syncSt').textContent='ローカル表示中（☁読み込みでクラウド取得）';
 </script>
 </body>
 </html>
