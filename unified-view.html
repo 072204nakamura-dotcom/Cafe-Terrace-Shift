@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cafe照 出勤表</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-height:100vh;}
+.hdr{background:#1e1810;color:#f5f0e8;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.logo{font-size:1.1rem;font-weight:700;color:#e8a060;}
+.logo-sub{font-size:.62rem;color:#8a7a60;margin-left:6px;}
+.hdr-right{text-align:right;}
+.reload-btn{background:rgba(255,255,255,.15);border:none;color:#f5f0e8;padding:6px 12px;border-radius:6px;font-size:.72rem;font-family:inherit;cursor:pointer;}
+.info{font-size:.6rem;color:#8a7a60;margin-top:2px;}
+/* TABS */
+.tabs{display:flex;background:#fff;border-bottom:2px solid #ddd0b8;overflow-x:auto;}
+.tab{flex:1;padding:10px 6px;border:none;background:transparent;color:#8a7a60;font-family:inherit;font-size:.72rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:all .2s;}
+.tab.on{color:#b8622a;border-bottom-color:#b8622a;font-weight:700;}
+.page{display:none;padding:12px;}
+.page.on{display:block;}
+/* CONTENT */
+.half-block{background:#fff;border:1px solid #ddd0b8;border-radius:10px;padding:12px;margin-bottom:14px;overflow-x:auto;}
+.half-title{font-size:.82rem;font-weight:700;color:#b8622a;margin-bottom:8px;}
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;font-size:.65rem;color:#8a7a60;padding:8px 12px;background:#f5f0e8;border-radius:6px;}
+.saved-info{font-size:.65rem;color:#8a7a60;text-align:center;padding:8px;margin-bottom:8px;}
+.loading{text-align:center;padding:50px;color:#8a7a60;font-size:.85rem;}
+.nodata{text-align:center;padding:40px 20px;color:#8a7a60;font-size:.82rem;line-height:2.2;background:#fff;border-radius:10px;border:1px solid #ddd0b8;}
+/* WEEKLY TABLE */
+.wtable{width:100%;border-collapse:separate;border-spacing:0;font-size:.72rem;margin-bottom:16px;}
+.wtable th{background:#1e1810;color:#f5f0e8;padding:7px 5px;text-align:center;font-size:.68rem;}
+.wtable th.role-col{text-align:left;padding-left:10px;background:#f5f0e8;color:#1e1810;min-width:100px;}
+.wtable td{border-bottom:1px solid #ddd0b8;padding:6px 5px;text-align:center;vertical-align:middle;}
+.wtable td.role-lbl{background:#f5f0e8;font-size:.7rem;font-weight:600;text-align:left;padding-left:10px;border-left:3px solid transparent;}
+.nchip{font-size:.65rem;padding:2px 6px;border-radius:8px;display:inline-block;white-space:nowrap;}
+.rdot{display:inline-block;width:22px;height:22px;border-radius:50%;font-size:.6rem;font-weight:700;line-height:22px;text-align:center;color:#fff;}
+.mnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.mtitle{font-size:.9rem;font-weight:700;color:#b8622a;}
+.nbtn{background:#fff;border:1px solid #ddd0b8;color:#1e1810;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.8rem;}
+/* TABLE */
+table{border-collapse:collapse;width:100%;font-size:.7rem;}
+th,td{border:1px solid #ddd0b8;text-align:center;padding:3px 2px;}
+th{background:#f5f0e8;font-weight:600;}
+@media print{
+  .hdr,.tabs,.reload-btn,.legend,.saved-info,.mnav{display:none!important;}
+  body{background:#fff;padding:4px;}
+  .page{display:block!important;}
+  .half-block{border:none;padding:4px;margin-bottom:0;page-break-after:always;}
+  @page{size:A4 landscape;margin:8mm;}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div>
+    <div><span class="logo">Cafe照×なかむら</span><span class="logo-sub">出勤表</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v1</span></div>
+    <div style="margin-top:5px">
+      <button id="btnSessL" onclick="setSess('lunch')" style="background:#d4820a;color:#fff;border:1px solid #d4820a;border-radius:6px 0 0 6px;padding:4px 12px;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer">🌞 昼</button><button id="btnSessD" onclick="setSess('dinner')" style="background:#fff;color:#6040a0;border:1px solid #6040a0;border-radius:0 6px 6px 0;padding:4px 12px;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer">🌙 夜</button>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <button class="reload-btn" onclick="loadData()">🔄 更新</button>
+    <div class="info" id="info">読み込み中...</div>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab on" onclick="showTab('monthly',this)">📊 月間出勤表</button>
+  <button class="tab" onclick="showTab('weekly',this)">📋 役割一覧</button>
+</div>
+
+<!-- 月間出勤表 -->
+<div class="page on" id="tab-monthly">
+  <div id="monthlyContent"><div class="loading">📊 読み込み中...</div></div>
+</div>
+
+<!-- 役割一覧 -->
+<div class="page" id="tab-weekly">
+  <div class="mnav" style="margin-top:4px">
+    <button class="nbtn" onclick="weekOff--;renderWeekly()">◀ 前週</button>
+    <div class="mtitle" id="weekTitle" style="font-size:.82rem"></div>
+    <button class="nbtn" onclick="weekOff++;renderWeekly()">次週 ▶</button>
+  </div>
+  <div id="weeklyContent"><div class="loading">📋 読み込み中...</div></div>
+</div>
+
+<script>
+const GAS='https://script.google.com/macros/s/AKfycbw3gFMbJbW7rTjBzZH1zV6EiRDJ5551ozt7xFiR1RWggg_qQ93Re9Ev8lFLvqKtA816/exec';
+
+// State
+let gasData=null;
+let weekOff=0;
+let sess='lunch';
+function curDayData(){
+  if(!gasData) return {};
+  if(sess==='dinner') return gasData.dayDataD||{};
+  return gasData.dayDataL||gasData.dayData||{};
+}
+function setSess(m){
+  sess=m;
+  const bl=document.getElementById('btnSessL'),bd=document.getElementById('btnSessD');
+  bl.style.background=m==='lunch'?'#d4820a':'#fff';bl.style.color=m==='lunch'?'#fff':'#d4820a';
+  bd.style.background=m==='dinner'?'#6040a0':'#fff';bd.style.color=m==='dinner'?'#fff':'#6040a0';
+  if(gasData){ showMonthly(gasData.viewData||{}); renderWeekly(); }
+}
+
+function showTab(name,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.getElementById('tab-'+name).classList.add('on');
+  if(btn)btn.classList.add('on');
+  if(name==='weekly'&&gasData) renderWeekly();
+}
+
+const VIEW_ROLES=[
+  {id:'C',name:'レジ・案内',color:'#b8622a'},{id:'B',name:'ドリンク・デザート',color:'#8040a0'},
+  {id:'BC',name:'B+C兼務',color:'#c060c0'},{id:'BD',name:'B+D兼務',color:'#d06040'},
+  {id:'H',name:'配膳・オーダー',color:'#1878a0'},{id:'D',name:'料理仕上・管理',color:'#b04040'},
+  {id:'K',name:'調理メイン',color:'#2a8050'},{id:'P',name:'ピザ場',color:'#906020'},
+  {id:'W',name:'洗い場',color:'#406090'},{id:'J',name:'事務作業',color:'#507050'},
+  {id:'なC',name:'なかむら キャッシャー',color:'#b8860b'},{id:'なH',name:'なかむら ホール',color:'#8b4513'},
+  {id:'なS',name:'なかむら シェフ',color:'#a83232'},{id:'なK',name:'なかむら キッチン',color:'#5a4a20'},{id:'は',name:'博雲堂',color:'#2060a0'},
+];
+const VIEW_HOL=new Set(['2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23']);
+const VIEW_DOW=['日','月','火','水','木','金','土'];
+
+function vdk(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+function vdd(dayData,key){const x=dayData[key]; if(!x)return{open:true,assignments:[]}; return {open:x.open!==false, assignments:x.assignments||[]};}
+function vAvail(s,key){ if(s.avail&&s.avail[key]===false) return false; return true; }
+
+function buildHalfView(staff,dayData,y,m,fromDay,toDay){
+  const daysIn=new Date(y,m+1,0).getDate();
+  const endDay=Math.min(toDay,daysIn);
+  let h='<table><thead><tr><th style="text-align:left;min-width:80px">スタッフ</th>';
+  for(let d=fromDay;d<=endDay;d++){
+    const key=vdk(y,m,d),dow=new Date(y,m,d).getDay(),isH=VIEW_HOL.has(key);
+    const col=dow===0||isH?'#c03030':dow===6?'#2860a8':'#1e1810';
+    const bg=!vdd(dayData,key).open?'#eee':'#f5f0e8';
+    h+=`<th style="color:${col};background:${bg};min-width:30px;font-size:9pt">${d}<br><span style="font-size:7pt">${VIEW_DOW[dow]}${isH?'祝':''}</span></th>`;
+  }
+  h+='<th style="background:#f5f0e8">合計</th></tr></thead><tbody>';
+  staff.forEach(s=>{
+    let rt=0;
+    h+=`<tr><td style="text-align:left;padding:3px 6px;font-weight:500;background:#f5f0e8;white-space:nowrap;font-size:9pt">${s.name}</td>`;
+    for(let d=fromDay;d<=endDay;d++){
+      const key=vdk(y,m,d),data=vdd(dayData,key);
+      const asgn=data.assignments.find(a=>a.staffId===s.id&&a.role);
+      let cell='',bg='';
+      if(!data.open){bg='#f0f0f0';}
+      else if(asgn){rt++;const ro=VIEW_ROLES.find(r=>r.id===asgn.role);bg=ro?ro.color+'55':'#3a8a5a4d';cell=`<b style="color:${ro?ro.color:'#3a8a5a'};font-size:10pt">${asgn.role}</b>`;}
+      else if(!vAvail(s,key)){bg='rgba(200,48,48,.18)';cell='<b style="color:#c03030;font-size:11pt">✕</b>';}
+      h+=`<td style="background:${bg};text-align:center;padding:2px">${cell}</td>`;
+    }
+    h+=`<td style="text-align:center;font-weight:700;color:#3a8a5a;background:#f5f0e8;font-size:9pt">${rt}</td></tr>`;
+  });
+  h+='<tr style="background:#1e1810"><td style="color:#f5f0e8;padding:3px 6px;font-size:8pt">出勤人数</td>';
+  for(let d=fromDay;d<=endDay;d++){
+    const key=vdk(y,m,d),data=vdd(dayData,key);
+    if(!data.open){h+='<td style="color:#555;border:1px solid #333">—</td>';continue;}
+    const cnt=data.assignments.filter(a=>a.role).length;
+    const col=cnt>=4?'#7ff0a0':cnt>=2?'#f0c87f':'#f08080';
+    h+=`<td style="color:${col};font-weight:700;border:1px solid #333;font-size:9pt">${cnt}</td>`;
+  }
+  h+='<td style="border:1px solid #333"></td></tr></tbody></table>';
+  return h;
+}
+
+// ── 月間出勤表（元データから組み立て） ──
+function showMonthly(d){
+  document.title='シフト出勤表 '+(sess==='lunch'?'昼':'夜');
+  const staff=(gasData&&gasData.staff)||[];
+  const dayData=curDayData();
+  // 月の取得：viewDataにyear/monthがあれば使う、なければtitleから
+  let y=d.year, m=d.month;
+  if(y===undefined||m===undefined){
+    const mt=(d.title||'').match(/(\d{4})年(\d+)月/);
+    if(mt){y=parseInt(mt[1]);m=parseInt(mt[2])-1;}else{const n=new Date();y=n.getFullYear();m=n.getMonth();}
+  }
+  const daysIn=d.daysIn||new Date(y,m+1,0).getDate();
+  const legend=VIEW_ROLES.map(r=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px"><span style="display:inline-block;width:16px;height:14px;border-radius:2px;background:${r.color}44;color:${r.color};font-weight:700;text-align:center;font-size:7pt;line-height:14px">${r.id}</span>${r.name}</span>`).join('');
+  let h=`<div class="saved-info">📅 ${(d.title||'').replace('出勤表','')}${sess==='lunch'?'🌞昼':'🌙夜'} 出勤表　作成：${d.savedAt||''}</div>`;
+  h+=`<div class="half-block"><div class="half-title">前半（1〜15日）</div>${buildHalfView(staff,dayData,y,m,1,15)}</div>`;
+  h+=`<div class="half-block"><div class="half-title">後半（16〜${daysIn}日）</div>${buildHalfView(staff,dayData,y,m,16,daysIn)}</div>`;
+  h+=`<div class="legend">${legend}<span style="margin-right:8px"><b style="color:#c03030">✕</b> 欠勤希望</span><span>□ 未アサイン</span></div>`;
+  document.getElementById('monthlyContent').innerHTML=h;
+}
+
+// ── 役割一覧（週間） ──
+function renderWeekly(){
+  if(!gasData) return;
+  const staff=gasData.staff||[];
+  const dayData=curDayData();
+
+  // 週の日付を計算（curY/curMの第1週基準）
+  // viewDataからyear/monthを取得
+  const vd=gasData.viewData;
+  let baseY=new Date().getFullYear(), baseM=new Date().getMonth();
+  if(vd&&vd.title){
+    const match=vd.title.match(/(\d{4})年(\d+)月/);
+    if(match){baseY=parseInt(match[1]);baseM=parseInt(match[2])-1;}
+  }
+  const base=new Date(baseY,baseM,1);
+  const dow=base.getDay();
+  const mon=new Date(base);
+  mon.setDate(base.getDate()-(dow===0?6:dow-1)+weekOff*7);
+  const dates=Array.from({length:7},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});
+  const DOW=['月','火','水','木','金','土','日'];
+  const fmt=d=>`${d.getMonth()+1}/${d.getDate()}`;
+  const JP_HOL=new Set(['2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23']);
+
+  document.getElementById('weekTitle').textContent=`${dates[0].getFullYear()}年 ${fmt(dates[0])}（月）〜 ${fmt(dates[6])}（日）`;
+
+  function dk(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+  function dd(key){
+    if(!dayData[key]) return {open:true,assignments:[]};
+    const d=dayData[key];
+    if(d.open===undefined) d.open=true;
+    if(!d.assignments) d.assignments=[];
+    return d;
+  }
+  function gs(id){return staff.find(s=>s.id===id);}
+
+  // ── 役割別テーブル ──
+  const ROLES=[
+    {id:'C',name:'レジ・案内',color:'#b8622a',must:true},
+    {id:'B',name:'ドリンク・デザート',color:'#8040a0',must:true},
+    {id:'BC',name:'B+C兼務',color:'#c060c0',must:false},
+    {id:'BD',name:'B+D兼務',color:'#d06040',must:false},
+    {id:'H',name:'配膳・オーダー',color:'#1878a0',must:false},
+    {id:'D',name:'料理仕上・管理',color:'#b04040',must:true},
+    {id:'K',name:'調理メイン',color:'#2a8050',must:true},
+    {id:'P',name:'ピザ場',color:'#906020',must:true},
+    {id:'W',name:'洗い場',color:'#406090',must:false},
+    {id:'J',name:'事務作業',color:'#507050',must:false},
+    {id:'なC',name:'なかむら キャッシャー',color:'#b8860b',must:false},
+    {id:'なH',name:'なかむら ホール',color:'#8b4513',must:false},
+    {id:'なS',name:'なかむら シェフ',color:'#a83232',must:false},
+    {id:'なK',name:'なかむら キッチン',color:'#5a4a20',must:false},
+    {id:'は',name:'博雲堂',color:'#2060a0',must:false},
+  ];
+
+  let h='<div style="overflow-x:auto"><table class="wtable"><thead><tr><th class="role-col">役割</th>';
+  dates.forEach((d,i)=>{
+    const key=dk(d.getFullYear(),d.getMonth(),d.getDate());
+    const isH=JP_HOL.has(key),isSu=d.getDay()===0,isSa=d.getDay()===6;
+    const col=isSu||isH?'#f08080':isSa?'#80a8f0':'#f5f0e8';
+    h+=`<th style="color:${col}">${fmt(d)}<br>${DOW[i]}${isH?'<br><span style="font-size:.5rem;color:#f08080">祝</span>':''}</th>`;
+  });
+  h+='</tr></thead><tbody>';
+
+  ROLES.forEach(r=>{
+    h+=`<tr><td class="role-lbl" style="border-left-color:${r.color}">
+      <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:.72rem">${r.id}</span>
+      <span style="font-size:.62rem;color:#8a7a60;margin-left:3px">${r.name}</span>
+      ${r.must?'<span style="font-size:.52rem;background:rgba(192,48,48,.12);color:#c03030;padding:1px 4px;border-radius:2px;margin-left:3px">必須</span>':''}
+    </td>`;
+    dates.forEach(d=>{
+      const key=dk(d.getFullYear(),d.getMonth(),d.getDate());
+      const data=dd(key);
+      if(!data.open){h+=`<td style="background:#f5f0e8;color:#8a7a60;font-size:.62rem">休業</td>`;return;}
+      const a=data.assignments.find(x=>x.role===r.id);
+      if(a){
+        const s=gs(a.staffId);
+        h+=`<td><span class="nchip" style="background:${r.color}22;color:${r.color};border:1px solid ${r.color}55;font-size:.65rem">${s?s.name.split(' ')[0]:'?'}</span></td>`;
+      } else {
+        h+=`<td><span style="color:#ddd">—</span></td>`;
+      }
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+
+  // ── スタッフ別テーブル ──
+  h+=`<div style="font-size:.75rem;font-weight:700;color:#b8622a;margin:12px 0 6px">👤 スタッフ別</div>`;
+  h+=`<div style="overflow-x:auto"><table class="wtable"><thead><tr>`;
+  h+=`<th class="role-col" style="text-align:left;padding-left:10px">スタッフ</th>`;
+  dates.forEach((d,i)=>h+=`<th>${fmt(d)} ${DOW[i]}</th>`);
+  h+='</tr></thead><tbody>';
+
+  staff.forEach(s=>{
+    h+=`<tr><td style="text-align:left;padding-left:10px;font-size:.72rem;font-weight:500;background:#f5f0e8">${s.name}</td>`;
+    dates.forEach(d=>{
+      const key=dk(d.getFullYear(),d.getMonth(),d.getDate());
+      const data=dd(key);
+      if(!data.open){h+=`<td style="background:#f5f0e8;color:#8a7a60;font-size:.62rem">休業</td>`;return;}
+      const a=data.assignments.find(x=>x.staffId===s.id&&x.role);
+      if(a){
+        const ro=ROLES.find(r=>r.id===a.role);
+        h+=`<td><span class="rdot" style="background:${ro?ro.color:'#888'}">${a.role}</span></td>`;
+      } else if(s.avail&&s.avail[key]===false){
+        h+=`<td style="background:rgba(192,48,48,.08)"><span style="color:#c03030;font-weight:700">✕</span></td>`;
+      } else {
+        h+=`<td></td>`;
+      }
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+
+  document.getElementById('weeklyContent').innerHTML=h;
+}
+
+// ── データ読込 ──
+async function loadData(){
+  document.getElementById('info').textContent='読み込み中...';
+  try{
+    const lc=localStorage.getItem('unifiedViewCache');
+    if(lc){
+      gasData=JSON.parse(lc);
+      showMonthly(gasData.viewData||{});
+    }
+  }catch(e){}
+
+  try{
+    const r=await fetch(GAS+'?t='+Date.now(),{redirect:'follow',cache:'no-cache'});
+    const text=await r.text();
+    const start=text.indexOf('{'),end=text.lastIndexOf('}');
+    if(start<0) throw new Error('no data');
+    const data=JSON.parse(text.slice(start,end+1));
+    if(data.staff&&data.staff.length&&(data.app==='unified'||data.dayDataL)){
+      gasData=data;
+      localStorage.setItem('unifiedViewCache',JSON.stringify(data));
+      showMonthly(data.viewData||{});
+      document.getElementById('info').textContent='更新完了 ✓';
+    } else {
+      if(!gasData) document.getElementById('monthlyContent').innerHTML=showNoData();
+      document.getElementById('info').textContent='データなし';
+    }
+  }catch(e){
+    document.getElementById('info').textContent='オフライン';
+    if(!gasData) document.getElementById('monthlyContent').innerHTML=showNoData();
+  }
+}
+
+function showNoData(){
+  return `<div class="nodata">⚠ 出勤表がまだ作成されていません。<br><br>オーナーが「📊 月間出勤表」→「📤 出勤表を共有」を押すと表示されます。<br><br>その後「🔄 更新」を押してください。</div>`;
+}
+
+loadData();
+</script>
+</body>
+</html>

@@ -241,7 +241,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 <body>
 
 <div class="hdr">
-  <div><span class="logo">Cafe照</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">v11</span></div>
+  <div>
+    <div><span class="logo">Cafe照×なかむら</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v1</span></div>
+    <div style="margin-top:5px">
+      <button id="btnSessL" onclick="setSessMode('lunch')" style="background:#d4820a;color:#fff;border:1px solid #d4820a;border-radius:6px 0 0 6px;padding:5px 13px;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer">🌞 昼営業</button><button id="btnSessD" onclick="setSessMode('dinner')" style="background:#fff;color:#6040a0;border:1px solid #6040a0;border-radius:0 6px 6px 0;padding:5px 13px;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer">🌙 夜営業</button>
+    </div>
+  </div>
   <div style="text-align:right">
     <button class="sync-btn" onclick="syncAll()">💾 保存</button>
     <button class="sync-btn load-btn" onclick="loadFromCloudBtn()">☁ 読み込み</button>
@@ -383,6 +388,16 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 <!-- SETTINGS -->
 <div class="page" id="page-settings">
   <div class="stcard">
+    <div class="stitle">📦 旧Cafe照データの取り込み（初回のみ）</div>
+    <div style="font-size:.74rem;line-height:1.8;color:var(--muted);margin-bottom:8px">
+      旧Cafe照アプリのクラウドから、スタッフ・欠勤希望・シフト（7月分など）を<b style="color:#2c1f12">🌞昼のデータ</b>として取り込みます。<br>
+      「な」の役割は自動で「なS（伴樹）・なC（紀子）・なK（矢富）・なH（その他）」に変換されます。<br>
+      取り込み後、内容を確認して「💾 保存」を押してください。
+    </div>
+    <button class="savebtn" onclick="importCafeData()">📦 Cafe照のデータを取り込む</button>
+    <div id="importRes" style="font-size:.7rem;margin-top:5px"></div>
+  </div>
+  <div class="stcard">
     <div class="stitle">☁ Google スプレッドシート連携</div>
     <div style="background:rgba(58,138,90,.1);border:1px solid rgba(58,138,90,.3);border-radius:8px;padding:10px;font-size:.78rem;line-height:1.8">
       <span style="color:var(--green);font-weight:700">✓ 接続済み</span><br>
@@ -417,7 +432,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 // ============================================================
 // CONFIG
 // ============================================================
-const GAS_URL='https://script.google.com/macros/s/AKfycbzVretuyWf7A5QZEdQM8D2gbHi24t_NWm5U1U00VmXqjziSNi4EWLqnBnefE9c-KjKS/exec';
+const GAS_URL='https://script.google.com/macros/s/AKfycbw3gFMbJbW7rTjBzZH1zV6EiRDJ5551ozt7xFiR1RWggg_qQ93Re9Ev8lFLvqKtA816/exec'; // 統合クラウド（旧なかむらのシート）
+const CAFE_GAS_URL='https://script.google.com/macros/s/AKfycbzVretuyWf7A5QZEdQM8D2gbHi24t_NWm5U1U00VmXqjziSNi4EWLqnBnefE9c-KjKS/exec'; // 旧Cafe照（データ取込用・読み取りのみ）
 
 const ROLES=[
   {id:'C', name:'レジ・案内',       color:'#b8622a',must:true },
@@ -430,10 +446,16 @@ const ROLES=[
   {id:'P', name:'ピザ場',            color:'#906020',must:true },
   {id:'W', name:'洗い場',            color:'#406090',must:false},
   {id:'J', name:'事務作業',           color:'#507050',must:false},
-  {id:'な', name:'洋食だいにんぐなかむら', color:'#8b4513',must:false},
+  {id:'なC', name:'なかむら キャッシャー', color:'#b8860b',must:false},
+  {id:'なH', name:'なかむら ホール',       color:'#8b4513',must:false},
+  {id:'なS', name:'なかむら シェフ',       color:'#a83232',must:false},
+  {id:'なK', name:'なかむら キッチン',     color:'#5a4a20',must:false},
   {id:'は', name:'博雲堂',              color:'#2060a0',must:false},
 ];
-const MUST=['C','B','D','K','P'];
+const MUST=['C','B','D','K','P']; // Cafe照の必須（昼のみ）
+const NAKA_MUST=['なC','なH','なS','なK']; // なかむらの必須（昼・夜）
+const NAKA_ROLES=['なC','なH','なS','なK'];
+function sessRoleList(){ return sessMode==='lunch' ? ROLES : ROLES.filter(r=>NAKA_ROLES.includes(r.id)); }
 
 const JP_HOL=new Set([
   '2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24',
@@ -450,7 +472,19 @@ const JP_HOL=new Set([
 // STATE
 // ============================================================
 let staff=[];
-let dayData={};
+let dayDataL={}; // 🌞昼のデータ
+let dayDataD={}; // 🌙夜のデータ
+let dayData=dayDataL; // 現在表示中セッション（参照）
+let sessMode='lunch';
+function setSessMode(m){
+  sessMode=m;
+  dayData=(m==='lunch')?dayDataL:dayDataD;
+  const bl=document.getElementById('btnSessL'),bd=document.getElementById('btnSessD');
+  if(bl){bl.style.background=m==='lunch'?'#d4820a':'#fff';bl.style.color=m==='lunch'?'#fff':'#d4820a';}
+  if(bd){bd.style.background=m==='dinner'?'#6040a0':'#fff';bd.style.color=m==='dinner'?'#fff':'#6040a0';}
+  refreshViews();
+  try{ if(document.getElementById('page-weekly').classList.contains('on')&&typeof renderWeekly==='function') renderWeekly(); }catch(e){}
+}
 let curY=new Date().getFullYear();
 let curM=new Date().getMonth();
 let weekOff=0;
@@ -481,14 +515,16 @@ function isAvail(s,key){return s.avail[key]!==false;}
 function markOff(staffId,key){
   const s=gs(staffId); if(!s)return;
   s.avail[key]=false;
-  if(dayData[key]&&dayData[key].assignments){
-    dayData[key].assignments=dayData[key].assignments.filter(a=>a.staffId!==staffId);
-  }
+  [dayDataL,dayDataD].forEach(ds=>{
+    if(ds[key]&&ds[key].assignments){
+      ds[key].assignments=ds[key].assignments.filter(a=>a.staffId!==staffId);
+    }
+  });
 }
 function isWkHol(key){const d=new Date(key);return d.getDay()===0||d.getDay()===6||JP_HOL.has(key);}
 function toNum(s){return parseInt(s.replace(/[１-９０]/g,c=>String.fromCharCode(c.charCodeAt(0)-65248)));}
-function effFrom(s,key){const a=dd(key).assignments.find(x=>x.staffId===s.id);return (a&&a.timeFrom)||s.defFrom||'09:00';}
-function effTo(s,key){const a=dd(key).assignments.find(x=>x.staffId===s.id);return (a&&a.timeTo)||s.defTo||'17:00';}
+function effFrom(s,key){const a=dd(key).assignments.find(x=>x.staffId===s.id);return (a&&a.timeFrom)||(sessMode==='dinner'?'18:00':(s.defFrom||'09:00'));}
+function effTo(s,key){const a=dd(key).assignments.find(x=>x.staffId===s.id);return (a&&a.timeTo)||(sessMode==='dinner'?'22:00':(s.defTo||'17:00'));}
 const HOURLY_WAGE=1085;
 function workHours(from,to){
   if(!from||!to) return 0;
@@ -500,7 +536,7 @@ function workHours(from,to){
 function dayLaborCost(key){
   const data=dd(key);
   if(!data.open) return 0;
-  const NO_WAGE=['J','な','は']; // 事務作業・洋食だいにんぐなかむら・博雲堂は人件費計算しない
+  const NO_WAGE=['J','は','なC','なH','なS','なK']; // 事務・博雲堂・なかむら勤務は人件費計算しない
   let cost=0;
   data.assignments.filter(a=>a.role).forEach(a=>{
     if(NO_WAGE.includes(a.role)) return;
@@ -515,12 +551,14 @@ function checkRoles(key,dow){
   // BCはBとCを両方カバー、BDはBとDをカバー
   if(covered.has('BC')){covered.add('B');covered.add('C');}
   if(covered.has('BD')){covered.add('B');covered.add('D');}
-  const missing=MUST.filter(r=>!covered.has(r));
-  // H・Wは警告レベル
-  const warnRoles=['H','W'].filter(r=>!covered.has(r)&&staffOnDay(key).length>0);
+  const mustList = sessMode==='lunch' ? MUST.concat(NAKA_MUST) : NAKA_MUST;
+  const missing=mustList.filter(r=>!covered.has(r));
+  // H・Wは警告レベル（昼のみ）
+  const warnRoles= sessMode==='lunch' ? ['H','W'].filter(r=>!covered.has(r)&&staffOnDay(key).length>0) : [];
   return {missing, warnRoles};
 }
 function checkTime(key){
+  if(sessMode==='dinner') return [];
   const asgn=dd(key).assignments.filter(a=>a.role);
   const at9=asgn.filter(a=>{const s=gs(a.staffId);return s&&effFrom(s,key)<='09:00';}).length;
   const at10=asgn.filter(a=>{const s=gs(a.staffId);return s&&effFrom(s,key)<='10:00';}).length;
@@ -534,7 +572,11 @@ function checkTime(key){
 function countDays(staffId){
   const y=curY,m=curM,n=new Date(y,m+1,0).getDate();
   let c=0;
-  for(let d=1;d<=n;d++){const k=dk(y,m,d);if(dayData[k]&&dayData[k].open&&(dayData[k].assignments||[]).some(a=>a.staffId===staffId&&a.role))c++;}
+  for(let d=1;d<=n;d++){
+    const k=dk(y,m,d);
+    const w=ds=>ds[k]&&ds[k].open!==false&&(ds[k].assignments||[]).some(a=>a.staffId===staffId&&a.role);
+    if(w(dayDataL)||w(dayDataD))c++;
+  }
   return c;
 }
 function countWkDays(staffId,key){
@@ -564,7 +606,7 @@ function countWkHol(staffId){
 function chMonth(d){curM+=d;if(curM<0){curM=11;curY--;}if(curM>11){curM=0;curY++;}weekOff=0;renderCal();}
 
 function renderCal(){
-  document.getElementById('calTitle').textContent=`${curY}年 ${curM+1}月`;
+  document.getElementById('calTitle').textContent=`${curY}年 ${curM+1}月　${sessMode==='lunch'?'🌞昼':'🌙夜'}`;
   const y=curY,m=curM;
   const first=new Date(y,m,1).getDay();
   const days=new Date(y,m+1,0).getDate();
@@ -729,7 +771,7 @@ function renderModalBody(key,d,dow){
       </div>
       <select class="rsel" onchange="setRole('${key}',${s.id},this.value)">
         <option value="" ${!curRole?'selected':''}>― 休み</option>
-        ${ROLES.map(r=>{
+        ${sessRoleList().map(r=>{
           return `<option value="${r.id}" ${curRole===r.id?'selected':''}>${r.id}：${r.name}</option>`;
         }).join('')}
       </select>
@@ -1322,14 +1364,14 @@ async function syncAll(){
     const y=curY,m=curM,daysIn=new Date(y,m+1,0).getDate();
     const title=y+'年'+(m+1)+'月　月間出勤表';
     // renderMonthlyMatrixの結果を取得（DOMに描画せず文字列として）
-    const storedPrint=localStorage.getItem('cafePrintData');
+    const storedPrint=localStorage.getItem('unifiedPrintData');
     if(storedPrint) printData=JSON.parse(storedPrint);
   }catch(e){}
-  // 出勤表の表示データも一緒に保存（cafe-view.html用）
+  // 出勤表の表示データも一緒に保存（unified-view.html用）
   let viewData=null;
-  try{ viewData=buildViewData(); localStorage.setItem('cafeViewData',JSON.stringify(viewData)); }catch(e){}
+  try{ viewData=buildViewData(); localStorage.setItem('unifiedViewData',JSON.stringify(viewData)); }catch(e){}
   const payload=buildCloudPayload({viewData});
-  localStorage.setItem('cafeShift',payload);
+  localStorage.setItem('unifiedShift',payload);
   document.getElementById('syncSt').textContent='保存中...';
   try{
     // no-corsで保存（GitHub→GASの正しい方式）
@@ -1347,7 +1389,7 @@ async function syncAll(){
     const now=new Date().toLocaleTimeString('ja-JP');
     if(verified){
       document.getElementById('syncSt').textContent=`保存完了 ${now} ✓`;
-      localStorage.setItem('cafeShiftSavedAt',now);
+      localStorage.setItem('unifiedSavedAt',now);
       alert('✓ クラウドに保存できました！（確認済み）');
     }else{
       document.getElementById('syncSt').textContent=`保存…確認できず`;
@@ -1369,9 +1411,13 @@ async function testGas(){
 }
 function loadLocal(){
   try{
-    const d=JSON.parse(localStorage.getItem('cafeShift')||'{}');
+    const d=JSON.parse(localStorage.getItem('unifiedShift')||'{}');
     if(d.staff&&d.staff.length){staff=d.staff.map(applyDefaults);nextId=Math.max(...staff.map(s=>s.id))+1;}
-    if(d.dayData){dayData=d.dayData;Object.keys(dayData).forEach(k=>{if(dayData[k].open===undefined)dayData[k].open=true;});}
+    if(d.dayDataL){dayDataL=d.dayDataL;}
+    if(d.dayDataD){dayDataD=d.dayDataD;}
+    if(d.dayData&&!d.dayDataL){dayDataL=d.dayData;} // 旧形式は昼として読む
+    [dayDataL,dayDataD].forEach(ds=>Object.keys(ds).forEach(k=>{if(ds[k].open===undefined)ds[k].open=true;}));
+    dayData=(sessMode==='lunch')?dayDataL:dayDataD;
     if(d.lineHistory) lineHistory=d.lineHistory;
     return !!d.staff;
   }catch(e){return false;}
@@ -1389,7 +1435,7 @@ async function loadFromGas(){
     const text=await r.text();
     const js=text.slice(text.indexOf('{'),text.lastIndexOf('}')+1);
     const d=JSON.parse(js);
-    if(d.staff&&d.staff.length){
+    if(d.staff&&d.staff.length&&(d.app==='unified'||d.dayDataL)){
       // スタッフをマージ：クラウド優先だが、availはローカルの欠勤情報も残す（クラウドが間引いた月の分を保持）
       const localStaff=staff;
       staff=d.staff.map(cs=>{
@@ -1400,21 +1446,28 @@ async function loadFromGas(){
       });
       if(d.lineHistory) lineHistory=d.lineHistory;
       nextId=Math.max(...staff.map(s=>s.id))+1;
-      if(d.dayData){
-        // スマートマージ：クラウドに役割割当があるか、ローカルに割当が無ければクラウド優先。
-        // ローカルに割当があってクラウドが空ならローカルを残す（保存失敗で未送信のデータを守る）
-        const merged=Object.assign({}, dayData);
-        for(const k in d.dayData){
-          const cd=d.dayData[k];
+      // スマートマージ：クラウドに役割割当があるか、ローカルに割当が無ければクラウド優先。
+      // ローカルに割当があってクラウドが空ならローカルを残す（保存失敗で未送信のデータを守る）
+      const smartMerge=(localDs,cloudDs)=>{
+        const merged=Object.assign({}, localDs);
+        for(const k in (cloudDs||{})){
+          const cd=cloudDs[k];
           const ld=merged[k];
           const cloudHas=(cd.assignments||[]).some(a=>a.role);
           const localHas=ld&&(ld.assignments||[]).some(a=>a.role);
           if(cloudHas || !localHas){ merged[k]=cd; }
         }
-        dayData=merged;
-        Object.keys(dayData).forEach(k=>{if(dayData[k].open===undefined)dayData[k].open=true;});
+        Object.keys(merged).forEach(k=>{if(merged[k].open===undefined)merged[k].open=true;});
+        return merged;
+      };
+      if(d.dayDataL||d.dayDataD){
+        dayDataL=smartMerge(dayDataL, d.dayDataL);
+        dayDataD=smartMerge(dayDataD, d.dayDataD);
+      } else if(d.dayData){
+        dayDataL=smartMerge(dayDataL, d.dayData); // 旧形式は昼として読む
       }
-      localStorage.setItem('cafeShift',JSON.stringify({staff,dayData}));
+      dayData=(sessMode==='lunch')?dayDataL:dayDataD;
+      localStorage.setItem('unifiedShift',JSON.stringify({staff,dayDataL,dayDataD}));
       renderCal();updatePasteStaff();
       const now=new Date().toLocaleTimeString('ja-JP');
       document.getElementById('syncSt').textContent=`読込完了 ${now} ✓`;
@@ -1427,13 +1480,55 @@ async function loadFromGas(){
 }
 
 // ============================================================
+// 旧Cafe照データ取り込み（初回移行用）
+// ============================================================
+async function importCafeData(){
+  if(!confirm('旧Cafe照のクラウドからデータを取り込みます。\n\n・スタッフ、欠勤✕、シフトを「🌞昼」として読み込みます\n・「な」の役割は なS/なC/なK/なH に自動変換します\n・今この画面にあるデータは置き換わります\n\nよろしいですか？')) return;
+  const res=document.getElementById('importRes');
+  res.textContent='取り込み中...';
+  try{
+    const r=await fetch(CAFE_GAS_URL+'?t='+Date.now(),{redirect:'follow',cache:'no-cache'});
+    const t=await r.text();
+    const d=JSON.parse(t.slice(t.indexOf('{'),t.lastIndexOf('}')+1));
+    if(!d.staff||!d.staff.length){res.textContent='⚠ 旧データが見つかりませんでした';return;}
+    staff=d.staff.map(applyDefaults);
+    nextId=Math.max(...staff.map(s=>s.id))+1;
+    if(d.lineHistory) lineHistory=d.lineHistory;
+    // な → なかむらの具体的役割へ変換（伴樹=なS・紀子=なC・矢富=なK・他=なH）
+    const NA_MAP={12:'なS',11:'なC',1:'なK'};
+    dayDataL={};
+    let conv=0,total=0;
+    for(const k in (d.dayData||{})){
+      const src=d.dayData[k];
+      const asgn=(src.assignments||[]).filter(a=>a.role).map(a=>{
+        total++;
+        let role=a.role;
+        if(role==='な'){role=NA_MAP[a.staffId]||'なH';conv++;}
+        const o={staffId:a.staffId,role};
+        if(a.timeFrom)o.timeFrom=a.timeFrom;
+        if(a.timeTo)o.timeTo=a.timeTo;
+        return o;
+      });
+      dayDataL[k]={open:src.open===false?false:true,assignments:asgn};
+    }
+    // 夜は営業/休業を昼に合わせて用意（割当は空。あとから入力）
+    dayDataD={};
+    for(const k in dayDataL){ dayDataD[k]={open:dayDataL[k].open,assignments:[]}; }
+    dayData=(sessMode==='lunch')?dayDataL:dayDataD;
+    refreshViews();updatePasteStaff();
+    res.innerHTML=`<span style="color:var(--green)">✓ 取り込み完了：スタッフ${staff.length}名・役割${total}件（うち「な」変換${conv}件）</span>`;
+    alert('✓ 取り込みました！\n\nスタッフ'+staff.length+'名・役割'+total+'件（な変換'+conv+'件）\n\n内容を確認して、右上の「💾 保存」を押すと統合クラウドに保存されます。');
+  }catch(e){res.textContent='⚠ 取り込みに失敗: '+e.message;}
+}
+
+// ============================================================
 // MONTHLY REPORT
 // ============================================================
 let monthlyView = 'matrix';
 
 function doPrint(){
   const origTitle=document.title;
-  document.title=`Cafe照シフト_${curY}年${curM+1}月`;
+  document.title=`シフト_${curY}年${curM+1}月_${sessMode==='lunch'?'昼':'夜'}`;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('print-target'));
   document.getElementById('page-monthly').classList.add('print-target');
   setTimeout(()=>{
@@ -1449,26 +1544,29 @@ function buildCloudPayload(extra){
   // 容量削減：直近の月だけ保存（現在月の-2〜+3ヶ月）＋ null項目を除去
   const lo=new Date(curY,curM-2,1), hi=new Date(curY,curM+4,0);
   const inWin=key=>{const dt=new Date(key); return dt>=lo&&dt<=hi;};
-  const keepDay={};
-  for(const key in dayData){
-    if(!inWin(key)) continue;
-    const d=dayData[key];
-    const asgn=(d.assignments||[]).filter(a=>a.role).map(a=>{
-      const o={staffId:a.staffId,role:a.role};
-      if(a.timeFrom) o.timeFrom=a.timeFrom;
-      if(a.timeTo) o.timeTo=a.timeTo;
-      return o;
-    });
-    const day={assignments:asgn};
-    if(d.open===false) day.open=false; // openはtrueなら省略（読込時にtrue補完）
-    keepDay[key]=day;
-  }
+  const slim=src=>{
+    const keep={};
+    for(const key in src){
+      if(!inWin(key)) continue;
+      const d=src[key];
+      const asgn=(d.assignments||[]).filter(a=>a.role).map(a=>{
+        const o={staffId:a.staffId,role:a.role};
+        if(a.timeFrom) o.timeFrom=a.timeFrom;
+        if(a.timeTo) o.timeTo=a.timeTo;
+        return o;
+      });
+      const day={assignments:asgn};
+      if(d.open===false) day.open=false;
+      keep[key]=day;
+    }
+    return keep;
+  };
   const slimStaff=staff.map(s=>{
     const av={};
     if(s.avail){ for(const k in s.avail){ if(s.avail[k]===false && inWin(k)) av[k]=false; } }
     return Object.assign({},s,{avail:av});
   });
-  const base={staff:slimStaff,dayData:keepDay,lineHistory};
+  const base={app:'unified',staff:slimStaff,dayDataL:slim(dayDataL),dayDataD:slim(dayDataD),lineHistory};
   return JSON.stringify(Object.assign(base, extra||{}));
 }
 
@@ -1486,13 +1584,13 @@ async function saveViewData(){
 
   // GASに保存
   try{
-    localStorage.setItem('cafeViewData', JSON.stringify(viewData));
-    const storedPrint=localStorage.getItem('cafePrintData');
+    localStorage.setItem('unifiedViewData', JSON.stringify(viewData));
+    const storedPrint=localStorage.getItem('unifiedPrintData');
     const pd=storedPrint?JSON.parse(storedPrint):null;
     const payload=buildCloudPayload({viewData});
     await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload});
     btn.textContent='✓ 共有しました！';
-    const viewUrl=location.href.substring(0,location.href.lastIndexOf('/'))+'/cafe-view.html';
+    const viewUrl=location.href.substring(0,location.href.lastIndexOf('/'))+'/unified-view.html';
     setTimeout(()=>{
       btn.textContent='📤 出勤表を共有';btn.disabled=false;
     },3000);
@@ -1675,11 +1773,11 @@ async function printMonthly(){
     body: document.getElementById('monthlyBody').innerHTML,
     savedAt: new Date().toLocaleString('ja-JP')
   };
-  localStorage.setItem('cafePrintData', JSON.stringify(printData));
+  localStorage.setItem('unifiedPrintData', JSON.stringify(printData));
 
   // GASに全データ＋printDataを保存
   try{
-    const storedPrint=localStorage.getItem('cafePrintData');
+    const storedPrint=localStorage.getItem('unifiedPrintData');
     const pd=storedPrint?JSON.parse(storedPrint):null;
     const payload=buildCloudPayload({});
     await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload});
@@ -1710,7 +1808,7 @@ function setMonthlyView(v){
 function renderMonthly(){
   const y=curY, m=curM;
   const daysIn=new Date(y,m+1,0).getDate();
-  document.getElementById('monthlyTitle').textContent=`${y}年${m+1}月　月間出勤表`;
+  document.getElementById('monthlyTitle').textContent=`${y}年${m+1}月　${sessMode==='lunch'?'🌞昼':'🌙夜'} 月間出勤表`;
 
   if(monthlyView==='matrix'){
     renderMonthlyMatrix(y,m,daysIn);
@@ -1844,7 +1942,7 @@ function renderMonthlyMatrix(y,m,daysIn){
   h+=`</tbody></table></div>`;
 
   // 月間人件費サマリー（印刷では非表示）
-  h+=`<div class="lc-row" style="background:#2a2018;color:#ffd9a0;border-radius:10px;padding:12px 16px;margin-top:12px;font-weight:700">💰 ${m+1}月の人件費合計：¥${monthCost.toLocaleString()}　<span style="font-size:.66rem;color:#caa06a;font-weight:400">（時給¥1,085・休憩なし／J事務・な・はは計算対象外／時間未入力は9:00〜17:00で計算）</span></div>`;
+  h+=`<div class="lc-row" style="background:#2a2018;color:#ffd9a0;border-radius:10px;padding:12px 16px;margin-top:12px;font-weight:700">💰 ${m+1}月の人件費合計：¥${monthCost.toLocaleString()}　<span style="font-size:.66rem;color:#caa06a;font-weight:400">（時給¥1,085・休憩なし／J事務・は・なかむら勤務は計算対象外／時間未入力は9:00〜17:00で計算）</span></div>`;
 
   // 凡例
   h+=`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:.65rem;color:var(--muted)">`;
