@@ -242,7 +242,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 
 <div class="hdr">
   <div>
-    <div><span class="logo">Cafe照×なかむら</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v1</span></div>
+    <div><span class="logo">Cafe照×なかむら</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v2</span></div>
     <div style="margin-top:5px">
       <button id="btnSessL" onclick="setSessMode('lunch')" style="background:#d4820a;color:#fff;border:1px solid #d4820a;border-radius:6px 0 0 6px;padding:5px 13px;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer">🌞 昼営業</button><button id="btnSessD" onclick="setSessMode('dinner')" style="background:#fff;color:#6040a0;border:1px solid #6040a0;border-radius:0 6px 6px 0;padding:5px 13px;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer">🌙 夜営業</button>
     </div>
@@ -382,6 +382,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
       🖨 印刷ダイアログを開く（前半・後半 各1ページ）
     </button>
   </div>
+  <div id="monthlyAlertBox"></div>
   <div id="monthlyBody"></div>
 </div>
 
@@ -396,6 +397,21 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
     </div>
     <button class="savebtn" onclick="importCafeData()">📦 Cafe照のデータを取り込む</button>
     <div id="importRes" style="font-size:.7rem;margin-top:5px"></div>
+  </div>
+  <div class="stcard">
+    <div class="stitle">⚖ 保険加入ラインの設定</div>
+    <div style="font-size:.7rem;color:var(--muted);line-height:1.7;margin-bottom:8px">
+      法改正があったらここを直すだけでOKです。<br>
+      雇用保険：週20h＝<b>月87h</b>（2028年10月に約44hへ引き下げ予定）<br>
+      社会保険：週30h＝<b>月130h</b>（従業員規模の要件撤廃で87hに切替予定）
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label class="flbl">雇用保険ライン（月h）</label><input type="number" class="finput" id="confKoyo" value="87" onchange="alertConf.koyo=parseInt(this.value)||87;refreshViews()"></div>
+      <div><label class="flbl">社会保険ライン（月h）</label><input type="number" class="finput" id="confShaho" value="130" onchange="alertConf.shaho=parseInt(this.value)||130;refreshViews()"></div>
+      <div><label class="flbl">予兆の閾値（%）</label><input type="number" class="finput" id="confWarn" value="90" onchange="alertConf.warnRatio=(parseInt(this.value)||90)/100;refreshViews()"></div>
+      <div><label class="flbl">扶養内希望者の閾値（%）</label><input type="number" class="finput" id="confFuyo" value="85" onchange="alertConf.fuyoRatio=(parseInt(this.value)||85)/100;refreshViews()"></div>
+    </div>
+    <div style="font-size:.62rem;color:var(--muted);margin-top:6px">変更後は「💾 保存」でクラウドにも保存されます。※博雲堂（は）の時間は集計に含みません</div>
   </div>
   <div class="stcard">
     <div class="stitle">☁ Google スプレッドシート連携</div>
@@ -568,6 +584,92 @@ function checkTime(key){
   if(at10<3)iss.push('10時3人不足');
   if(at11<MUST.length)iss.push('11〜13:30不足');
   return iss;
+}
+// ============================================================
+// 社会保険・雇用保険ライン監視（週20h=月87h／週30h=月130h）
+// 制度変更時はこの定数を直すだけでOK（設定タブからも変更可）
+// ============================================================
+let alertConf={
+  koyo:87,    // 雇用保険ライン（月時間）※2028/10に約44へ引き下げ予定
+  shaho:130,  // 社会保険ライン（月時間）※規模要件撤廃で87に切替予定
+  warnRatio:0.9,  // 🟡予兆の閾値（ラインの90%）
+  fuyoRatio:0.85  // 扶養内希望者の予兆閾値（85%）
+};
+const NO_HOURS_ROLES=['は']; // 労働時間に含めない役割（博雲堂＝他社勤務）
+
+function asgnHours(a,isDinner,s){
+  const from=a.timeFrom||(isDinner?'18:00':((s&&s.defFrom)||'09:00'));
+  const to=a.timeTo||(isDinner?'22:00':((s&&s.defTo)||'17:00'));
+  return workHours(from,to);
+}
+// 従業員×月の労働時間合計（昼＋夜、は除外）
+function monthlyWorkHours(staffId,y,m){
+  const n=new Date(y,m+1,0).getDate();
+  const s=gs(staffId);
+  let h=0;
+  for(let d2=1;d2<=n;d2++){
+    const k=dk(y,m,d2);
+    [[dayDataL,false],[dayDataD,true]].forEach(pair=>{
+      const ds=pair[0],isD=pair[1];
+      const day=ds[k]; if(!day||day.open===false) return;
+      (day.assignments||[]).forEach(a=>{
+        if(a.staffId!==staffId||!a.role) return;
+        if(NO_HOURS_ROLES.includes(a.role)) return;
+        h+=asgnHours(a,isD,s);
+      });
+    });
+  }
+  return Math.round(h*10)/10;
+}
+// ② 判定：0=なし 1=🟡予兆 2=🟠単月超過 3=🔴2ヶ月連続
+function alertLevel(staffId,y,m){
+  const s=gs(staffId);
+  const cur=monthlyWorkHours(staffId,y,m);
+  const pm=m===0?11:m-1, py=m===0?y-1:y;
+  const prev=monthlyWorkHours(staffId,py,pm);
+  const warnR=(s&&s.fuyo)?alertConf.fuyoRatio:alertConf.warnRatio;
+  const judge=line=>{
+    if(cur>=line&&prev>=line) return 3;
+    if(cur>=line) return 2;
+    if(cur>=line*warnR) return 1;
+    return 0;
+  };
+  return {cur,prev,lvK:judge(alertConf.koyo),lvS:judge(alertConf.shaho),student:!!(s&&s.student)};
+}
+// バッジHTML生成
+function alertBadge(staffId,y,m){
+  const a=alertLevel(staffId,y,m);
+  const mk=(lv,label)=>{
+    if(!lv)return '';
+    const col=lv===3?'#c03030':lv===2?'#d4820a':'#a89020';
+    const bg=lv===3?'rgba(192,48,48,.13)':lv===2?'rgba(212,130,10,.13)':'rgba(168,144,32,.13)';
+    const icon=lv===3?'🔴':lv===2?'🟠':'🟡';
+    const suffix=lv===3?'2ヶ月連続':lv===2?'超過':'予兆';
+    return `<span style="font-size:.56rem;background:${bg};color:${col};border:1px solid ${col};border-radius:6px;padding:0 4px;font-weight:700;white-space:nowrap;margin-left:2px">${icon}${label}${suffix}</span>`;
+  };
+  let h=mk(a.lvK,'雇用')+mk(a.lvS,'社保');
+  if(a.student&&(a.lvK||a.lvS)) h+=`<span style="font-size:.56rem;color:var(--muted);margin-left:2px">(学生)</span>`;
+  return h;
+}
+// ③ リアルタイム警告：ラインをまたいだ瞬間にポップアップ
+function checkLineCross(staffId,before){
+  const after=monthlyWorkHours(staffId,curY,curM);
+  const s=gs(staffId);
+  const checks=[[alertConf.koyo,'雇用保険（週20時間）'],[alertConf.shaho,'社会保険（週30時間）']];
+  checks.forEach(pair=>{
+    const line=pair[0],name=pair[1];
+    if(before<line&&after>=line){
+      alert('⚠ 加入ライン超過\n\n'+(s?s.name:'')+' さんの今月の労働時間が '+after+'時間 になり、\n'+name+'のライン【月'+line+'時間】を超えました。\n\n・1ヶ月目：注意（🟠）\n・2ヶ月連続で超えると、3ヶ月目から加入対象になる可能性があります（🔴）\n\nシフトを調整するか、加入手続きをご検討ください。');
+    }
+  });
+}
+function syncAlertConfUI(){
+  try{
+    document.getElementById('confKoyo').value=alertConf.koyo;
+    document.getElementById('confShaho').value=alertConf.shaho;
+    document.getElementById('confWarn').value=Math.round(alertConf.warnRatio*100);
+    document.getElementById('confFuyo').value=Math.round(alertConf.fuyoRatio*100);
+  }catch(e){}
 }
 function countDays(staffId){
   const y=curY,m=curM,n=new Date(y,m+1,0).getDate();
@@ -758,6 +860,7 @@ function renderModalBody(key,d,dow){
         <div class="atime">
           ${curFrom}〜${curTo}
           　今月:<span style="color:${overM?'var(--red)':nearM?'var(--yellow)':'var(--green)'};font-weight:700">${assigned}</span>/${max}日
+          　<span style="font-family:'DM Mono',monospace;font-size:.6rem">${monthlyWorkHours(s.id,curY,curM)}h</span>${alertBadge(s.id,curY,curM)}
           　今週:<span style="color:${overW?'var(--red)':'inherit'};font-weight:700">${wkCnt}</span>/${wkMax}日
           ${wkhMax!=null&&isWkHol(key)?` 土日祝:<span style="color:${overH?'var(--red)':'inherit'};font-weight:700">${wkhCnt}</span>/${wkhMax}日`:''}
         </div>
@@ -836,6 +939,7 @@ function refreshViews(){
   }catch(e){}
 }
 function setRole(key,staffId,role){
+  const _hBefore=monthlyWorkHours(staffId,curY,curM);
   const data=dd(key);
   if(!role){
     data.assignments=data.assignments.filter(x=>x.staffId!==staffId);
@@ -851,13 +955,16 @@ function setRole(key,staffId,role){
   const ganttEl=document.querySelector('.gantt');
   if(ganttEl){ganttEl.outerHTML=buildGantt(key);}
   refreshViews();
+  checkLineCross(staffId,_hBefore);
 }
 function setTime(key,staffId,field,val){
+  const _hBefore=monthlyWorkHours(staffId,curY,curM);
   const data=dd(key);
   let a=data.assignments.find(x=>x.staffId===staffId);
   if(!a){a={staffId,role:'',timeFrom:null,timeTo:null};data.assignments.push(a);}
   a[field]=val;
   refreshViews();
+  checkLineCross(staffId,_hBefore);
 }
 function toggleDayPref(key,rid,btn){
   const data=dd(key);if(!data.prefRoles)data.prefRoles=[];
@@ -1276,6 +1383,13 @@ function renderStaff(){
         <input class="scname" value="${s.name}" onchange="updSt(${s.id},'name',this.value);renderCal()">
         <button class="delbtn" onclick="delStaff(${s.id})">削除</button>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px;font-size:.68rem">
+        <span>今月の労働時間：<b style="font-family:'DM Mono',monospace">${monthlyWorkHours(s.id,curY,curM)}h</b></span>
+        <span style="color:var(--muted)">（雇用${alertConf.koyo}h／社保${alertConf.shaho}h）</span>
+        ${alertBadge(s.id,curY,curM)}
+        <label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" ${s.student?'checked':''} onchange="updSt(${s.id},'student',this.checked);renderStaff()">学生</label>
+        <label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" ${s.fuyo?'checked':''} onchange="updSt(${s.id},'fuyo',this.checked);renderStaff()">扶養内希望</label>
+      </div>
 
       <div class="sgrid">
 
@@ -1416,6 +1530,7 @@ function loadLocal(){
     if(d.dayDataL){dayDataL=d.dayDataL;}
     if(d.dayDataD){dayDataD=d.dayDataD;}
     if(d.dayData&&!d.dayDataL){dayDataL=d.dayData;} // 旧形式は昼として読む
+    if(d.alertConf){alertConf=Object.assign(alertConf,d.alertConf);syncAlertConfUI();}
     [dayDataL,dayDataD].forEach(ds=>Object.keys(ds).forEach(k=>{if(ds[k].open===undefined)ds[k].open=true;}));
     dayData=(sessMode==='lunch')?dayDataL:dayDataD;
     if(d.lineHistory) lineHistory=d.lineHistory;
@@ -1466,8 +1581,9 @@ async function loadFromGas(){
       } else if(d.dayData){
         dayDataL=smartMerge(dayDataL, d.dayData); // 旧形式は昼として読む
       }
+      if(d.alertConf){alertConf=Object.assign(alertConf,d.alertConf);syncAlertConfUI();}
       dayData=(sessMode==='lunch')?dayDataL:dayDataD;
-      localStorage.setItem('unifiedShift',JSON.stringify({staff,dayDataL,dayDataD}));
+      localStorage.setItem('unifiedShift',JSON.stringify({staff,dayDataL,dayDataD,alertConf}));
       renderCal();updatePasteStaff();
       const now=new Date().toLocaleTimeString('ja-JP');
       document.getElementById('syncSt').textContent=`読込完了 ${now} ✓`;
@@ -1566,7 +1682,7 @@ function buildCloudPayload(extra){
     if(s.avail){ for(const k in s.avail){ if(s.avail[k]===false && inWin(k)) av[k]=false; } }
     return Object.assign({},s,{avail:av});
   });
-  const base={app:'unified',staff:slimStaff,dayDataL:slim(dayDataL),dayDataD:slim(dayDataD),lineHistory};
+  const base={app:'unified',staff:slimStaff,dayDataL:slim(dayDataL),dayDataD:slim(dayDataD),lineHistory,alertConf};
   return JSON.stringify(Object.assign(base, extra||{}));
 }
 
@@ -1809,6 +1925,21 @@ function renderMonthly(){
   const y=curY, m=curM;
   const daysIn=new Date(y,m+1,0).getDate();
   document.getElementById('monthlyTitle').textContent=`${y}年${m+1}月　${sessMode==='lunch'?'🌞昼':'🌙夜'} 月間出勤表`;
+
+  // 社保・雇用保険ライン監視まとめ（画面のみ・印刷非表示）
+  try{
+    const hits=staff.map(s=>({s,a:alertLevel(s.id,y,m)})).filter(x=>x.a.lvK||x.a.lvS);
+    let alertHtml='';
+    if(hits.length){
+      alertHtml=`<div class="lc-row" style="background:#fff;border:2px solid #d4820a;border-radius:10px;padding:10px 14px;margin-bottom:10px">
+        <div style="font-size:.76rem;font-weight:700;color:#a06000;margin-bottom:5px">⚖ 保険加入ライン監視（昼＋夜の合計時間）</div>
+        ${hits.map(x=>`<div style="font-size:.72rem;margin:2px 0">${x.s.name}　<b style="font-family:'DM Mono',monospace">${x.a.cur}h</b><span style="color:var(--muted);font-size:.62rem">（先月${x.a.prev}h）</span> ${alertBadge(x.s.id,y,m)}</div>`).join('')}
+        <div style="font-size:.6rem;color:var(--muted);margin-top:5px">🟡=ライン90%到達　🟠=単月超過　🔴=2ヶ月連続（3ヶ月目から加入対象の可能性）※最終判断は年金事務所・社労士に確認</div>
+      </div>`;
+    }
+    const mb0=document.getElementById('monthlyAlertBox');
+    if(mb0){mb0.outerHTML=`<div id="monthlyAlertBox">${alertHtml}</div>`;}
+  }catch(e){}
 
   if(monthlyView==='matrix'){
     renderMonthlyMatrix(y,m,daysIn);
