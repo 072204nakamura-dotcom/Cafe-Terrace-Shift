@@ -242,7 +242,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 
 <div class="hdr">
   <div>
-    <div><span class="logo">Cafe照×なかむら</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v2</span></div>
+    <div><span class="logo">Cafe照×なかむら</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v3</span></div>
     <div style="margin-top:5px">
       <button id="btnSessL" onclick="setSessMode('lunch')" style="background:#d4820a;color:#fff;border:1px solid #d4820a;border-radius:6px 0 0 6px;padding:5px 13px;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer">🌞 昼営業</button><button id="btnSessD" onclick="setSessMode('dinner')" style="background:#fff;color:#6040a0;border:1px solid #6040a0;border-radius:0 6px 6px 0;padding:5px 13px;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer">🌙 夜営業</button>
     </div>
@@ -575,7 +575,8 @@ function checkRoles(key,dow){
 }
 function checkTime(key){
   if(sessMode==='dinner') return [];
-  const asgn=dd(key).assignments.filter(a=>a.role);
+  // Cafe照の開店人員チェック：なかむら勤務(な○)と博雲堂(は)は店にいないので数えない
+  const asgn=dd(key).assignments.filter(a=>a.role&&!NAKA_ROLES.includes(a.role)&&a.role!=='は');
   const at9=asgn.filter(a=>{const s=gs(a.staffId);return s&&effFrom(s,key)<='09:00';}).length;
   const at10=asgn.filter(a=>{const s=gs(a.staffId);return s&&effFrom(s,key)<='10:00';}).length;
   const at11=asgn.filter(a=>{const s=gs(a.staffId);return s&&effFrom(s,key)<='11:00'&&effTo(s,key)>='13:30';}).length;
@@ -688,7 +689,8 @@ function countWkDays(staffId,key){
   for(let i=0;i<7;i++){
     const d=new Date(mon);d.setDate(mon.getDate()+i);
     const k=dk(d.getFullYear(),d.getMonth(),d.getDate());
-    if(dayData[k]&&dayData[k].open&&(dayData[k].assignments||[]).some(a=>a.staffId===staffId&&a.role))c++;
+    const w=ds=>ds[k]&&ds[k].open!==false&&(ds[k].assignments||[]).some(a=>a.staffId===staffId&&a.role);
+    if(w(dayDataL)||w(dayDataD))c++;
   }
   return c;
 }
@@ -697,7 +699,8 @@ function countWkHol(staffId){
   let c=0;
   for(let d=1;d<=n;d++){
     const k=dk(y,m,d);
-    if(isWkHol(k)&&dayData[k]&&dayData[k].open&&(dayData[k].assignments||[]).some(a=>a.staffId===staffId&&a.role))c++;
+    const w=ds=>ds[k]&&ds[k].open!==false&&(ds[k].assignments||[]).some(a=>a.staffId===staffId&&a.role);
+    if(isWkHol(k)&&(w(dayDataL)||w(dayDataD)))c++;
   }
   return c;
 }
@@ -896,8 +899,10 @@ function renderModalBody(key,d,dow){
   if(warnRoles.length) h+=`<div class="mwarn">△ ${warnRoles.join('・')}が未配置です</div>`;
   if(tIss.length) h+=`<div class="mwarn">⏰ ${tIss.join(' / ')}</div>`;
 
-  const _cost=dayLaborCost(key);
-  h+=`<div class="mcost">💰 この日の人件費：¥${_cost.toLocaleString()}　<span style="font-size:.62rem;color:var(--muted)">（時給¥1,085・休憩なし）</span></div>`;
+  if(sessMode==='lunch'){
+    const _cost=dayLaborCost(key);
+    h+=`<div class="mcost">💰 この日の人件費：¥${_cost.toLocaleString()}　<span style="font-size:.62rem;color:var(--muted)">（時給¥1,085・休憩なし・Cafe照勤務分）</span></div>`;
+  }
 
   document.getElementById('modalBody').innerHTML=h;
 }
@@ -1035,7 +1040,7 @@ function renderWeekly(){
   const DOW2=['月','火','水','木','金','土','日'];
   const todayK=dk(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());
   document.getElementById('weekTitle').textContent=
-    `${dates[0].getFullYear()}年 ${fmt(dates[0])}（月）〜 ${fmt(dates[6])}（日）`;
+    `${sessMode==='lunch'?'🌞昼':'🌙夜'}　${dates[0].getFullYear()}年 ${fmt(dates[0])}（月）〜 ${fmt(dates[6])}（日）`;
 
   // Role table
   let h='<div style="font-size:.78rem;font-weight:700;color:var(--accent);margin-bottom:6px">🎯 役割別</div>';
@@ -1484,30 +1489,42 @@ async function syncAll(){
   // 出勤表の表示データも一緒に保存（unified-view.html用）
   let viewData=null;
   try{ viewData=buildViewData(); localStorage.setItem('unifiedViewData',JSON.stringify(viewData)); }catch(e){}
-  const payload=buildCloudPayload({viewData});
+  // 合言葉（保存トークン）を埋め込み、読み戻して照合する＝「保存できたつもり」事故を防ぐ
+  const savedToken='tk'+Date.now()+Math.floor(Math.random()*1000);
+  const payload=buildCloudPayload({viewData,savedToken});
   localStorage.setItem('unifiedShift',payload);
+  // 容量チェック（スプレッドシート1セル上限＝50,000字）
+  if(payload.length>50000){
+    document.getElementById('syncSt').textContent='⚠ 容量超過・保存中止';
+    alert('🛑 保存を中止しました。\n\nデータ量が '+payload.length.toLocaleString()+' 字で、上限50,000字を超えています。\nこのまま送っても保存できず、データを失う恐れがあります。\n\nClaudeに「容量オーバーの対策をして」と相談してください。');
+    return;
+  }
+  if(payload.length>45000){
+    alert('⚠ データ量が '+payload.length.toLocaleString()+' 字になっています（上限50,000字）。\nそろそろ容量対策が必要です。保存は続行します。');
+  }
   document.getElementById('syncSt').textContent='保存中...';
   try{
     // no-corsで保存（GitHub→GASの正しい方式）
     await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload});
-    // 保存後に読み戻して本当に保存できたか確認
+    // 保存後に読み戻して「今回の合言葉」が入っているか照合
     await new Promise(r=>setTimeout(r,1500));
-    let verified=false;
+    let verified=false, cloudLen=0;
     try{
       const chk=await fetch(GAS_URL+'?t='+Date.now(),{redirect:'follow',cache:'no-cache'});
       const txt=await chk.text();
       const js=txt.slice(txt.indexOf('{'),txt.lastIndexOf('}')+1);
+      cloudLen=js.length;
       const d=JSON.parse(js);
-      verified = d.staff && d.staff.length>0;
+      verified = d.savedToken===savedToken;
     }catch(e){}
     const now=new Date().toLocaleTimeString('ja-JP');
     if(verified){
-      document.getElementById('syncSt').textContent=`保存完了 ${now} ✓`;
+      document.getElementById('syncSt').textContent=`保存完了 ${now} ✓（${payload.length.toLocaleString()}字）`;
       localStorage.setItem('unifiedSavedAt',now);
-      alert('✓ クラウドに保存できました！（確認済み）');
+      alert('✓ クラウドに保存できました！（照合済み・'+payload.length.toLocaleString()+'字／上限50,000字）');
     }else{
-      document.getElementById('syncSt').textContent=`保存…確認できず`;
-      alert('⚠ 送信しましたが、保存の確認ができませんでした。\nGASのデプロイ設定（アクセス：全員）と再デプロイをご確認ください。');
+      document.getElementById('syncSt').textContent=`🛑 保存できていません`;
+      alert('🛑 保存が確認できませんでした！\n\nクラウドには古いデータ（'+cloudLen.toLocaleString()+'字）が残ったままです。\n・容量超過（今回の送信は'+payload.length.toLocaleString()+'字）\n・通信エラー\n・GASのデプロイ設定\nのいずれかが原因です。\n\n画面は閉じずに、もう一度「💾 保存」を試すか、Claudeに相談してください。\n※この画面のデータはブラウザ内には保存されています。');
     }
   }catch(e){
     document.getElementById('syncSt').textContent='ローカルのみ保存';
@@ -2055,8 +2072,9 @@ function renderMonthlyMatrix(y,m,daysIn){
   h+=`<td style="border:1px solid #333;text-align:center;color:#f5f0e8;font-family:'DM Mono',monospace">${staff.reduce((s2,s)=>s2+countDays(s.id),0)}</td>`;
   h+=`</tr>`;
 
-  // 人件費行（印刷では非表示：lc-row）
+  // 人件費行（印刷では非表示：lc-row／夜モードは対象外のため非表示）
   let monthCost=0;
+  if(sessMode==='lunch'){
   h+=`<tr class="lc-row" style="background:#2a2018">`;
   h+=`<td style="padding:5px 8px;color:#ffd9a0;font-weight:700;position:sticky;left:0;background:#2a2018;border:1px solid #333;white-space:nowrap">💰人件費</td>`;
   for(let d=1;d<=daysIn;d++){
@@ -2069,11 +2087,14 @@ function renderMonthlyMatrix(y,m,daysIn){
   }
   h+=`<td class="lc-cell" style="border:1px solid #333;text-align:center;color:#ffd9a0;font-family:'DM Mono',monospace;font-weight:700;font-size:.6rem;white-space:nowrap">¥${monthCost.toLocaleString()}</td>`;
   h+=`</tr>`;
+  }
 
   h+=`</tbody></table></div>`;
 
-  // 月間人件費サマリー（印刷では非表示）
+  // 月間人件費サマリー（印刷では非表示／昼モードのみ）
+  if(sessMode==='lunch'){
   h+=`<div class="lc-row" style="background:#2a2018;color:#ffd9a0;border-radius:10px;padding:12px 16px;margin-top:12px;font-weight:700">💰 ${m+1}月の人件費合計：¥${monthCost.toLocaleString()}　<span style="font-size:.66rem;color:#caa06a;font-weight:400">（時給¥1,085・休憩なし／J事務・は・なかむら勤務は計算対象外／時間未入力は9:00〜17:00で計算）</span></div>`;
+  }
 
   // 凡例
   h+=`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:.65rem;color:var(--muted)">`;
