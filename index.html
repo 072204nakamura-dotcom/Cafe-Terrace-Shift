@@ -242,7 +242,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 
 <div class="hdr">
   <div>
-    <div><span class="logo">Cafe照×なかむら</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v3</span></div>
+    <div><span class="logo">Cafe照×なかむら</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v3.2</span></div>
     <div style="margin-top:5px">
       <button id="btnSessL" onclick="setSessMode('lunch')" style="background:#d4820a;color:#fff;border:1px solid #d4820a;border-radius:6px 0 0 6px;padding:5px 13px;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer">🌞 昼営業</button><button id="btnSessD" onclick="setSessMode('dinner')" style="background:#fff;color:#6040a0;border:1px solid #6040a0;border-radius:0 6px 6px 0;padding:5px 13px;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer">🌙 夜営業</button>
     </div>
@@ -527,6 +527,21 @@ function dd(key){
   return dayData[key];
 }
 function isAvail(s,key){return s.avail[key]!==false;}
+// スタッフの基本設定：昼/夜に出勤できるか（未設定=true）
+function sessOk(s){return sessMode==='dinner' ? s.dinnerOk!==false : s.lunchOk!==false;}
+function availSess(s,key){return isAvail(s,key)&&sessOk(s);}
+function toggleSessOk(id,sess,btn){
+  const s=gs(id);if(!s)return;
+  const field=sess==='lunch'?'lunchOk':'dinnerOk';
+  s[field]=s[field]===false?true:false;
+  const isOn=s[field]!==false;
+  btn.style.background=isOn?(sess==='lunch'?'rgba(212,130,10,.15)':'rgba(96,64,160,.15)'):'var(--surface2)';
+  btn.style.borderColor=isOn?(sess==='lunch'?'#d4820a':'#6040a0'):'var(--border)';
+  btn.style.color=isOn?(sess==='lunch'?'#d4820a':'#6040a0'):'var(--muted)';
+  btn.style.fontWeight=isOn?'700':'400';
+  btn.textContent=(sess==='lunch'?'🌞 昼出勤':'🌙 夜出勤')+(isOn?'✓':'✗');
+  refreshViews();
+}
 // 欠勤希望にする時、その日の役割割り当ても外す（✕が役割で隠れないように）
 function markOff(staffId,key){
   const s=gs(staffId); if(!s)return;
@@ -732,7 +747,7 @@ function renderCal(){
     const data=dd(key);
     const dow=new Date(y,m,d).getDay();
     const isOpen=data.open;
-    const avail=staff.filter(s=>isAvail(s,key));
+    const avail=staff.filter(s=>availSess(s,key));
     const {missing,warnRoles}=checkRoles(key,dow);
     const tIss=isOpen?checkTime(key):[];
     const isMiss=isOpen&&missing.length>0;
@@ -814,8 +829,8 @@ function openModal(key,d){
 function renderModalBody(key,d,dow){
   const data=dd(key);
   // avail = all staff whose avail[key] !== false
-  const avail=staff.filter(s=>isAvail(s,key));
-  const unavail=staff.filter(s=>!isAvail(s,key));
+  const avail=staff.filter(s=>availSess(s,key));
+  const unavail=staff.filter(s=>!availSess(s,key));
 
   let h='';
 
@@ -886,9 +901,10 @@ function renderModalBody(key,d,dow){
   h+='</div>';
 
   if(unavail.length){
-    h+=`<div class="albl">出勤不可（欠勤希望）</div><div class="arows">`;
+    h+=`<div class="albl">出勤不可</div><div class="arows">`;
     unavail.forEach(s=>{
-      h+=`<div class="arow unav"><div class="adot"></div><div><div class="aname">${s.name}</div></div><span style="font-size:.65rem;color:var(--muted)">欠勤希望</span></div>`;
+      const reason=!isAvail(s,key)?'欠勤希望':(sessMode==='dinner'?'🌙夜出勤なし':'🌞昼出勤なし');
+      h+=`<div class="arow unav"><div class="adot"></div><div><div class="aname">${s.name}</div></div><span style="font-size:.65rem;color:var(--muted)">${reason}</span></div>`;
     });
     h+='</div>';
   }
@@ -1070,7 +1086,7 @@ function renderWeekly(){
         // BC/BDカバーを考慮して候補を検索
         const can=staff.filter(s=>{
           const myRoles=s.roles||[];
-          return (myRoles.includes(r.id)||myRoles.some(mr=>ROLE_COVERS[mr]&&ROLE_COVERS[mr].includes(r.id)))&&isAvail(s,key);
+          return (myRoles.includes(r.id)||myRoles.some(mr=>ROLE_COVERS[mr]&&ROLE_COVERS[mr].includes(r.id)))&&availSess(s,key);
         });
         h+=`<td style="${r.must&&!can.length?'background:rgba(192,48,48,.05)':''}">
           <span style="color:${r.must?'var(--red)':'var(--border)'};font-size:.85rem">—</span>
@@ -1388,6 +1404,10 @@ function renderStaff(){
         <input class="scname" value="${s.name}" onchange="updSt(${s.id},'name',this.value);renderCal()">
         <button class="delbtn" onclick="delStaff(${s.id})">削除</button>
       </div>
+      <div style="display:flex;gap:6px;margin-bottom:7px">
+        <button onclick="toggleSessOk(${s.id},'lunch',this)" style="flex:1;padding:7px;border-radius:7px;border:1px solid ${s.lunchOk!==false?'#d4820a':'var(--border)'};background:${s.lunchOk!==false?'rgba(212,130,10,.15)':'var(--surface2)'};color:${s.lunchOk!==false?'#d4820a':'var(--muted)'};font-family:inherit;font-size:.72rem;font-weight:${s.lunchOk!==false?'700':'400'};cursor:pointer">🌞 昼出勤${s.lunchOk!==false?'✓':'✗'}</button>
+        <button onclick="toggleSessOk(${s.id},'dinner',this)" style="flex:1;padding:7px;border-radius:7px;border:1px solid ${s.dinnerOk!==false?'#6040a0':'var(--border)'};background:${s.dinnerOk!==false?'rgba(96,64,160,.15)':'var(--surface2)'};color:${s.dinnerOk!==false?'#6040a0':'var(--muted)'};font-family:inherit;font-size:.72rem;font-weight:${s.dinnerOk!==false?'700':'400'};cursor:pointer">🌙 夜出勤${s.dinnerOk!==false?'✓':'✗'}</button>
+      </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px;font-size:.68rem">
         <span>今月の労働時間：<b style="font-family:'DM Mono',monospace">${monthlyWorkHours(s.id,curY,curM)}h</b></span>
         <span style="color:var(--muted)">（雇用${alertConf.koyo}h／社保${alertConf.shaho}h）</span>
@@ -1460,7 +1480,7 @@ function toggleRole(id,rid,btn){
 
 function updSt(id,k,v){const s=gs(id);if(s)s[k]=v;}
 function addStaff(){
-  staff.push({id:nextId++,name:'新スタッフ',roles:['C'],rolePrio:['C'],defFrom:'09:00',defTo:'17:00',avail:{},priority:3,maxDays:20,maxDaysWeek:7,maxWkHol:null,fixedRole:null,prefDays:[],flag:'normal'});
+  staff.push({id:nextId++,name:'新スタッフ',roles:['C'],rolePrio:['C'],defFrom:'09:00',defTo:'17:00',avail:{},priority:3,maxDays:20,maxDaysWeek:7,maxWkHol:null,fixedRole:null,prefDays:[],flag:'normal',lunchOk:true,dinnerOk:true});
   renderStaff();updatePasteStaff();renderCal();
 }
 function delStaff(id){
@@ -1507,16 +1527,22 @@ async function syncAll(){
     // no-corsで保存（GitHub→GASの正しい方式）
     await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload});
     // 保存後に読み戻して「今回の合言葉」が入っているか照合
-    await new Promise(r=>setTimeout(r,1500));
+    // GAS側の書き込みに時間がかかることがあるので、最大5回・計約12秒までリトライする
     let verified=false, cloudLen=0;
-    try{
-      const chk=await fetch(GAS_URL+'?t='+Date.now(),{redirect:'follow',cache:'no-cache'});
-      const txt=await chk.text();
-      const js=txt.slice(txt.indexOf('{'),txt.lastIndexOf('}')+1);
-      cloudLen=js.length;
-      const d=JSON.parse(js);
-      verified = d.savedToken===savedToken;
-    }catch(e){}
+    for(let attempt=1; attempt<=5; attempt++){
+      await new Promise(r=>setTimeout(r, attempt===1?2000:2500));
+      document.getElementById('syncSt').textContent=`保存確認中... (${attempt}/5)`;
+      try{
+        const chk=await fetch(GAS_URL+'?t='+Date.now(),{redirect:'follow',cache:'no-cache'});
+        const txt=await chk.text();
+        const js=txt.slice(txt.indexOf('{'),txt.lastIndexOf('}')+1);
+        cloudLen=js.length;
+        const d=JSON.parse(js);
+        if(d.savedToken===savedToken){ verified=true; break; }
+        // 合言葉が無い旧データでも、字数が一致すれば保存成功とみなす（保険）
+        if(!d.savedToken && cloudLen===payload.length){ verified=true; break; }
+      }catch(e){}
+    }
     const now=new Date().toLocaleTimeString('ja-JP');
     if(verified){
       document.getElementById('syncSt').textContent=`保存完了 ${now} ✓（${payload.length.toLocaleString()}字）`;
@@ -2016,8 +2042,8 @@ function renderMonthlyMatrix(y,m,daysIn){
   h+=`<th style="background:var(--surface2);padding:5px 4px;text-align:center;border:1px solid var(--border);min-width:40px">合計</th>`;
   h+=`</tr></thead><tbody>`;
 
-  // 各スタッフ行
-  staff.forEach(s=>{
+  // 各スタッフ行（このセッションに出勤できる人だけ表示）
+  staff.filter(s=>sessOk(s)).forEach(s=>{
     let rowTotal=0;
     h+=`<tr>`;
     h+=`<td style="background:var(--surface2);padding:5px 8px;font-weight:500;position:sticky;left:0;border:1px solid var(--border);white-space:nowrap">${s.name}</td>`;
@@ -2124,7 +2150,7 @@ function renderUnused(y,m,daysIn){
     if(!data.open) continue;
 
     const assigned=new Set(data.assignments.filter(a=>a.role).map(a=>a.staffId));
-    const unused=staff.filter(s=>isAvail(s,key)&&!assigned.has(s.id));
+    const unused=staff.filter(s=>availSess(s,key)&&!assigned.has(s.id));
     if(!unused.length) continue;
 
     hasAny=true;
@@ -2160,7 +2186,7 @@ function renderUnused(y,m,daysIn){
       const data=dd(key);
       if(!data.open) continue;
       const assigned=data.assignments.find(a=>a.staffId===s.id&&a.role);
-      if(!assigned&&isAvail(s,key)) unusedDays.push(d);
+      if(!assigned&&availSess(s,key)) unusedDays.push(d);
     }
     if(!unusedDays.length) return;
 

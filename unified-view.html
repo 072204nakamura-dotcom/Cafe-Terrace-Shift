@@ -141,7 +141,7 @@ function buildHalfView(staff,dayData,y,m,fromDay,toDay){
     h+=`<th style="color:${col};background:${bg};min-width:30px;font-size:9pt">${d}<br><span style="font-size:7pt">${VIEW_DOW[dow]}${isH?'祝':''}</span></th>`;
   }
   h+='<th style="background:#f5f0e8">合計</th></tr></thead><tbody>';
-  staff.forEach(s=>{
+  staff.filter(s=> sess==='dinner' ? s.dinnerOk!==false : s.lunchOk!==false ).forEach(s=>{
     let rt=0;
     h+=`<tr><td style="text-align:left;padding:3px 6px;font-weight:500;background:#f5f0e8;white-space:nowrap;font-size:9pt">${s.name}</td>`;
     for(let d=fromDay;d<=endDay;d++){
@@ -279,7 +279,7 @@ function renderWeekly(){
   dates.forEach((d,i)=>h+=`<th>${fmt(d)} ${DOW[i]}</th>`);
   h+='</tr></thead><tbody>';
 
-  staff.forEach(s=>{
+  staff.filter(s=> sess==='dinner' ? s.dinnerOk!==false : s.lunchOk!==false ).forEach(s=>{
     h+=`<tr><td style="text-align:left;padding-left:10px;font-size:.72rem;font-weight:500;background:#f5f0e8">${s.name}</td>`;
     dates.forEach(d=>{
       const key=dk(d.getFullYear(),d.getMonth(),d.getDate());
