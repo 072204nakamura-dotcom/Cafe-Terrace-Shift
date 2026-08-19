@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>休み希望カレンダー</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{--bg:#f7f3ec;--surface:#fff;--surface2:#f0e9dd;--border:#e0d5c2;--muted:#8a7055;--accent:#b8622a;--green:#3d7a50;--red:#c03030;--blue:#2060a0;--lunch:#d4820a;--dinner:#6040a0;}
+body{font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;background:var(--bg);color:#2a1e10;padding:10px;padding-bottom:90px;}
+.hdr{text-align:center;padding:8px 4px 4px;}
+.logo{font-size:1.05rem;font-weight:900;color:var(--accent);}
+.sub{font-size:.68rem;color:var(--muted);margin-top:3px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin:10px 0;}
+.lbl{font-size:.7rem;color:var(--muted);font-weight:700;margin-bottom:5px;display:block;}
+.sel{width:100%;padding:11px;border:1px solid var(--border);border-radius:9px;background:var(--surface2);font-family:inherit;font-size:.95rem;color:#2a1e10;}
+.deadline{border-radius:9px;padding:9px 12px;font-size:.76rem;font-weight:700;margin:8px 0;}
+.deadline.open{background:rgba(61,122,80,.1);border:1px solid rgba(61,122,80,.4);color:var(--green);}
+.deadline.closed{background:rgba(192,48,48,.08);border:1px solid rgba(192,48,48,.35);color:var(--red);}
+.howto{font-size:.7rem;color:var(--muted);line-height:1.8;}
+.state-demo{display:inline-block;font-size:.66rem;font-weight:900;border-radius:5px;padding:1px 7px;margin:0 2px;}
+.mtitle{text-align:center;font-size:1rem;font-weight:900;color:var(--accent);margin:6px 0 10px;}
+table.cal{width:100%;border-collapse:separate;border-spacing:3px;table-layout:fixed;}
+.cal th{font-size:.66rem;color:var(--muted);padding:2px;}
+.cal th.su{color:var(--red);}.cal th.sa{color:var(--blue);}
+td.day{background:var(--surface);border:1.5px solid var(--border);border-radius:9px;vertical-align:top;padding:3px 2px;min-height:74px;height:74px;cursor:pointer;transition:box-shadow .1s;}
+td.day:active{box-shadow:0 0 0 2px var(--accent);}
+td.day.empty{background:transparent;border-color:transparent;cursor:default;}
+td.day.locked{cursor:default;}
+td.day.short{background:#fff2f2;border-color:var(--red);border-width:2px;}
+.dnum{font-size:.78rem;font-weight:700;text-align:center;}
+.dnum.su{color:var(--red);}.dnum.sa{color:var(--blue);}
+.hol{font-size:.42rem;color:var(--red);text-align:center;line-height:1;}
+.mystate{display:block;margin:2px auto 1px;font-size:.6rem;font-weight:900;border-radius:5px;padding:1px 2px;text-align:center;min-height:15px;}
+.st-none{background:var(--surface2);color:#b0a080;}
+.st-lunch{background:rgba(212,130,10,.18);color:var(--lunch);border:1.5px solid var(--lunch);}
+.st-dinner{background:rgba(96,64,160,.15);color:var(--dinner);border:1.5px solid var(--dinner);}
+.st-both{background:rgba(192,48,48,.14);color:var(--red);border:1.5px solid var(--red);}
+.others{display:flex;flex-wrap:wrap;gap:1px;justify-content:center;}
+.oc{font-size:.5rem;border-radius:4px;padding:0 2px;font-weight:700;line-height:1.5;}
+.oc.l{background:rgba(212,130,10,.14);color:var(--lunch);}
+.oc.d{background:rgba(96,64,160,.12);color:var(--dinner);}
+.oc.b{background:rgba(192,48,48,.12);color:var(--red);}
+.shortmark{font-size:.48rem;color:#fff;background:var(--red);border-radius:4px;text-align:center;font-weight:900;margin-top:1px;}
+.legend2{display:flex;flex-wrap:wrap;gap:6px;font-size:.62rem;color:var(--muted);margin:8px 0;}
+.savebar{position:fixed;left:0;right:0;bottom:0;background:rgba(247,243,236,.97);border-top:1px solid var(--border);padding:10px 14px;display:flex;gap:8px;align-items:center;}
+.savebtn{flex:1;background:var(--green);color:#fff;border:none;border-radius:10px;padding:13px;font-family:inherit;font-size:.95rem;font-weight:900;cursor:pointer;}
+.savebtn:disabled{background:#b8b0a0;cursor:default;}
+.rbtn{background:var(--blue);color:#fff;border:none;border-radius:10px;padding:13px 15px;font-family:inherit;font-size:.8rem;cursor:pointer;}
+.status{font-size:.66rem;color:var(--muted);text-align:center;margin-top:5px;}
+.loading{text-align:center;padding:30px;color:var(--muted);}
+.nightinfo{font-size:.62rem;color:var(--dinner);margin-top:2px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="logo">🗓 休み希望カレンダー</div>
+  <div class="sub">Cafe照 × 洋食だいにんぐなかむら</div>
+</div>
+
+<div class="card">
+  <label class="lbl">あなたの名前を選んでください</label>
+  <select class="sel" id="whoSel" onchange="changeWho()"><option value="">読み込み中…</option></select>
+  <div id="deadlineBox"></div>
+</div>
+
+<div class="card">
+  <div class="howto">
+    日付をタップするたびに切り替わります：<br>
+    <span class="state-demo st-none">なし</span>→<span class="state-demo st-lunch">🌞昼✕</span>→<span class="state-demo st-dinner">🌙夜✕</span>→<span class="state-demo st-both">終日✕</span>→なし<br>
+    （夜出勤のない方は「なし⇄終日✕」の切り替えだけです）<br>
+    ほかの人の休み希望も各日に表示されます。<b style="color:var(--red)">赤い日は人手が足りません</b>——できれば別の日にお願いします🙏<br>
+    入れ直しは何度でもOK。最後に下の<b>「💾 この内容で保存」</b>を押してください。
+  </div>
+</div>
+
+<div class="mtitle" id="mtitle">読み込み中…</div>
+<div id="calBox" class="loading">クラウドから読み込んでいます…</div>
+<div class="legend2">
+  <span>🌞昼✕=昼だけ休み</span><span>🌙夜✕=夜だけ休み</span><span>終日✕=まる1日休み</span>
+  <span style="color:var(--red)">⚠=出られる人が 平日9人／土日祝10人 を下回る日</span>
+</div>
+<div class="status" id="status"></div>
+
+<div class="savebar">
+  <button class="savebtn" id="saveBtn" onclick="saveWish()" disabled>💾 この内容で保存</button>
+  <button class="rbtn" onclick="loadAll(true)">🔄 更新</button>
+</div>
+
+<script>
+const GAS='https://script.google.com/macros/s/AKfycbw3gFMbJbW7rTjBzZH1zV6EiRDJ5551ozt7xFiR1RWggg_qQ93Re9Ev8lFLvqKtA816/exec';
+const REQ_WEEKDAY=9;   // 平日に必要な人数（両店オープン）
+const REQ_WKHOL=10;    // 土日祝に必要な人数
+const DEADLINE_DAY=15; // 毎月15日締切
+const JP_HOL=new Set(['2026-01-01','2026-01-12','2026-02-11','2026-02-23','2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06','2026-07-20','2026-08-11','2026-09-21','2026-09-22','2026-09-23','2026-10-12','2026-11-03','2026-11-23','2027-01-01','2027-01-11','2027-02-11','2027-02-23','2027-03-21','2027-03-22','2027-04-29','2027-05-03','2027-05-04','2027-05-05','2027-07-19','2027-08-11','2027-09-20','2027-09-23','2027-10-11','2027-11-03','2027-11-23']);
+
+let staff=[];        // 全スタッフ（メインデータから）
+let wishes=[];       // 休み希望の全行
+let myDays={};       // 自分の希望 {key: 'lunch'|'dinner'|'both'}
+let who=null;        // 選択中スタッフ
+let dirty=false;
+
+// ── 対象月＝来月。編集可＝今日が1〜15日 ──
+const now=new Date();
+const tY=now.getMonth()===11?now.getFullYear()+1:now.getFullYear();
+const tM=now.getMonth()===11?0:now.getMonth()+1; // 0-11
+const monthKey=`${tY}-${String(tM+1).padStart(2,'0')}`;
+const editable=now.getDate()<=DEADLINE_DAY;
+
+function dk(d){return `${monthKey}-${String(d).padStart(2,'0')}`;}
+function shortName(s){return (s.name||'').split(/\s|　/)[0];}
+function lunchStaffCount(){return staff.filter(s=>s.lunchOk!==false).length;}
+function dinnerStaffCount(){return staff.filter(s=>s.dinnerOk!==false).length;}
+
+// ── データ読み込み ──
+async function loadAll(showMsg){
+  const st=document.getElementById('status');
+  st.textContent='読み込み中…';
+  try{
+    // メインデータ（スタッフ一覧）
+    const r1=await fetch(GAS+'?t='+Date.now(),{redirect:'follow',cache:'no-cache'});
+    const t1=await r1.text();
+    const d1=JSON.parse(t1.slice(t1.indexOf('{'),t1.lastIndexOf('}')+1));
+    if(d1.staff&&d1.staff.length) staff=d1.staff;
+    // 休み希望
+    const r2=await fetch(GAS+'?mode=kibou&month='+monthKey+'&t='+Date.now(),{redirect:'follow',cache:'no-cache'});
+    const d2=await r2.json();
+    wishes=(d2.rows||[]);
+    // 自分の既存希望を反映
+    if(who){
+      const mine=wishes.find(w=>w.staffId===who.id);
+      if(mine&&!dirty) myDays=Object.assign({},mine.days);
+    }
+    buildWhoSel();
+    render();
+    st.textContent='最終更新 '+new Date().toLocaleTimeString('ja-JP');
+    if(showMsg) st.textContent+='　✓ 最新にしました';
+  }catch(e){
+    st.textContent='⚠ 読み込みに失敗しました。電波の良いところでもう一度お試しください。';
+  }
+}
+
+function buildWhoSel(){
+  const sel=document.getElementById('whoSel');
+  const saved=localStorage.getItem('kibouWho');
+  sel.innerHTML='<option value="">— 選んでください —</option>'+staff.map(s=>`<option value="${s.id}" ${saved==String(s.id)?'selected':''}>${s.name}</option>`).join('');
+  if(saved&&staff.find(s=>String(s.id)===saved)&&!who){who=staff.find(s=>String(s.id)===saved);applyMine();}
+  updateDeadlineBox();
+  updateSaveBtn();
+}
+function changeWho(){
+  const v=document.getElementById('whoSel').value;
+  who=staff.find(s=>String(s.id)===v)||null;
+  if(who)localStorage.setItem('kibouWho',v);
+  myDays={};dirty=false;
+  applyMine();
+  render();
+  updateSaveBtn();
+}
+function applyMine(){
+  if(!who)return;
+  const mine=wishes.find(w=>w.staffId===who.id);
+  myDays=mine?Object.assign({},mine.days):{};
+}
+function updateDeadlineBox(){
+  const el=document.getElementById('deadlineBox');
+  const mLabel=`${tM+1}月`;
+  if(editable){
+    el.innerHTML=`<div class="deadline open">✅ ${mLabel}分を入力できます（締切：${now.getMonth()+1}月${DEADLINE_DAY}日いっぱい）</div>`;
+  }else{
+    el.innerHTML=`<div class="deadline closed">🔒 ${mLabel}分の受付は締め切りました（毎月1日〜15日に翌月分を入力できます）。現在はシフト作成中です。</div>`;
+  }
+}
+function updateSaveBtn(){
+  document.getElementById('saveBtn').disabled=!(editable&&who);
+}
+
+// ── タップで状態切り替え ──
+function tapDay(d){
+  if(!editable)return;
+  if(!who){alert('先に名前を選んでください');return;}
+  const key=dk(d);
+  const cur=myDays[key]||'';
+  const canDinner=who.dinnerOk!==false, canLunch=who.lunchOk!==false;
+  let next;
+  if(canDinner&&canLunch){
+    next=cur===''?'lunch':cur==='lunch'?'dinner':cur==='dinner'?'both':'';
+  }else{
+    next=cur===''?'both':''; // 昼のみ/夜のみの人は「なし⇄終日✕」
+  }
+  if(next)myDays[key]=next;else delete myDays[key];
+  dirty=true;
+  render();
+}
+
+// ── 描画 ──
+function render(){
+  document.getElementById('mtitle').textContent=`${tY}年 ${tM+1}月 の休み希望`;
+  const first=new Date(tY,tM,1).getDay(), days=new Date(tY,tM+1,0).getDate();
+  const lTotal=lunchStaffCount(), dTotal=dinnerStaffCount();
+  let h='<table class="cal"><thead><tr>';
+  ['日','月','火','水','木','金','土'].forEach((n,i)=>h+=`<th class="${i===0?'su':i===6?'sa':''}">${n}</th>`);
+  h+='</tr></thead><tbody><tr>';
+  for(let i=0;i<first;i++)h+='<td class="day empty"></td>';
+  let col=first;
+  for(let d=1;d<=days;d++){
+    const key=dk(d), dow=new Date(tY,tM,d).getDay(), isHol=JP_HOL.has(key);
+    const req=(dow===0||dow===6||isHol)?REQ_WKHOL:REQ_WEEKDAY;
+    // この日の全員の希望（自分の未保存分も反映して表示）
+    const dayWish=[];
+    staff.forEach(s=>{
+      let st=null;
+      if(who&&s.id===who.id){ st=myDays[key]||null; }
+      else{ const w=wishes.find(x=>x.staffId===s.id); st=w?(w.days[key]||null):null; }
+      if(st)dayWish.push({s,st});
+    });
+    const lunchOff=dayWish.filter(x=>(x.st==='lunch'||x.st==='both')&&x.s.lunchOk!==false).length;
+    const dinnerOff=dayWish.filter(x=>(x.st==='dinner'||x.st==='both')&&x.s.dinnerOk!==false).length;
+    const lunchAvail=lTotal-lunchOff;
+    const isShort=lunchAvail<req;
+    const myState=who?(myDays[key]||''):'';
+    const stCls=myState==='lunch'?'st-lunch':myState==='dinner'?'st-dinner':myState==='both'?'st-both':'st-none';
+    const stTxt=myState==='lunch'?'🌞昼✕':myState==='dinner'?'🌙夜✕':myState==='both'?'終日✕':(editable&&who?'タップ':'');
+    h+=`<td class="day ${isShort?'short':''} ${editable?'':'locked'}" onclick="tapDay(${d})">`;
+    h+=`<div class="dnum ${dow===0||isHol?'su':dow===6?'sa':''}">${d}${isHol?'<div class="hol">祝</div>':''}</div>`;
+    h+=`<span class="mystate ${stCls}">${stTxt}</span>`;
+    // 他の人の希望チップ
+    h+='<div class="others">';
+    dayWish.forEach(x=>{
+      if(who&&x.s.id===who.id)return;
+      const cls=x.st==='lunch'?'l':x.st==='dinner'?'d':'b';
+      const mark=x.st==='lunch'?'🌞':x.st==='dinner'?'🌙':'✕';
+      h+=`<span class="oc ${cls}">${mark}${shortName(x.s)}</span>`;
+    });
+    h+='</div>';
+    if(isShort)h+=`<div class="shortmark">⚠残${lunchAvail}/${req}人</div>`;
+    if(dinnerOff>0)h+=`<div class="nightinfo">夜✕${dinnerOff}/${dTotal}</div>`;
+    h+='</td>';
+    col++;
+    if(col%7===0&&d<days)h+='</tr><tr>';
+  }
+  while(col%7!==0){h+='<td class="day empty"></td>';col++;}
+  h+='</tr></tbody></table>';
+  document.getElementById('calBox').innerHTML=h;
+  document.getElementById('calBox').className='';
+}
+
+// ── 保存 ──
+async function saveWish(){
+  if(!who){alert('先に名前を選んでください');return;}
+  if(!editable){alert('締切を過ぎているため保存できません');return;}
+  const btn=document.getElementById('saveBtn');
+  btn.disabled=true;btn.textContent='保存中…';
+  const token='tk'+Date.now()+Math.floor(Math.random()*1000);
+  try{
+    await fetch(GAS,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'kibou_save',staffId:who.id,staffName:who.name,month:monthKey,days:myDays,token})});
+    // 読み戻して照合（最大4回リトライ）
+    let ok=false;
+    for(let i=0;i<4;i++){
+      await new Promise(r=>setTimeout(r,i===0?2000:2500));
+      btn.textContent=`保存確認中… (${i+1}/4)`;
+      try{
+        const r=await fetch(GAS+'?mode=kibou&month='+monthKey+'&t='+Date.now(),{redirect:'follow',cache:'no-cache'});
+        const d=await r.json();
+        const mine=(d.rows||[]).find(w=>w.staffId===who.id);
+        if(mine&&mine.token===token){ok=true;wishes=d.rows;break;}
+      }catch(e){}
+    }
+    if(ok){
+      dirty=false;
+      render();
+      const cnt=Object.keys(myDays).length;
+      alert('✓ 保存しました！\n'+who.name+'さんの'+(tM+1)+'月の休み希望：'+cnt+'日分\n\n変更したくなったら、締切（'+DEADLINE_DAY+'日）までなら何度でも入れ直せます。');
+      document.getElementById('status').textContent='✓ 保存済み '+new Date().toLocaleTimeString('ja-JP');
+    }else{
+      alert('⚠ 保存が確認できませんでした。\n・締切を過ぎている\n・電波が不安定\nのどちらかの可能性があります。\nもう一度「💾 保存」を押してみてください。');
+    }
+  }catch(e){
+    alert('⚠ 通信エラーで保存できませんでした。電波の良いところでもう一度お試しください。');
+  }
+  btn.textContent='💾 この内容で保存';
+  updateSaveBtn();
+}
+
+loadAll(false);
+</script>
+</body>
+</html>

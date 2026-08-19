@@ -242,7 +242,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 
 <div class="hdr">
   <div>
-    <div><span class="logo">Cafe照×なかむら</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v3.2</span></div>
+    <div><span class="logo">Cafe照×なかむら</span><span class="logo" style="font-size:.65rem;color:#8a7a60">SHIFT</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v4</span></div>
     <div style="margin-top:5px">
       <button id="btnSessL" onclick="setSessMode('lunch')" style="background:#d4820a;color:#fff;border:1px solid #d4820a;border-radius:6px 0 0 6px;padding:5px 13px;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer">🌞 昼営業</button><button id="btnSessD" onclick="setSessMode('dinner')" style="background:#fff;color:#6040a0;border:1px solid #6040a0;border-radius:0 6px 6px 0;padding:5px 13px;font-family:inherit;font-size:.74rem;font-weight:700;cursor:pointer">🌙 夜営業</button>
     </div>
@@ -294,6 +294,16 @@ body{font-family:'Noto Sans JP',sans-serif;background:#f5f0e8;color:#1e1810;min-
 
 <!-- LINE -->
 <div class="page" id="page-line">
+  <div class="pcard" style="border:2px solid var(--green)">
+    <div class="ptitle">📥 スタッフの休み希望を取り込む</div>
+    <div style="font-size:.7rem;color:var(--muted);line-height:1.7;margin-bottom:7px">
+      スタッフが「🗓休み希望カレンダー」で入力した希望を、<b style="color:#2c1f12">表示中の月</b>に一括反映します。<br>
+      🌞昼✕→昼だけ休み／🌙夜✕→夜だけ休み／終日✕→両方休み。該当日の役割割り当ても自動で外れます。<br>
+      ⚠ 取り込むと、その月の欠勤マークは希望カレンダーの内容で<b>置き換わります</b>（希望を出したスタッフのみ）。
+    </div>
+    <button class="pbtn g" onclick="importKibou()">📥 休み希望を取り込む（表示中の月）</button>
+    <div id="kibouRes"></div>
+  </div>
   <div class="pcard">
     <div class="ptitle">📋 欠勤希望収集メッセージを生成</div>
     <button class="pbtn g" onclick="genReqMsg()">来月のメッセージを生成</button>
@@ -529,7 +539,12 @@ function dd(key){
 function isAvail(s,key){return s.avail[key]!==false;}
 // スタッフの基本設定：昼/夜に出勤できるか（未設定=true）
 function sessOk(s){return sessMode==='dinner' ? s.dinnerOk!==false : s.lunchOk!==false;}
-function availSess(s,key){return isAvail(s,key)&&sessOk(s);}
+function availSess(s,key){
+  if(!sessOk(s)) return false;
+  if(s.avail&&s.avail[key]===false) return false; // 終日✕
+  const m=sessMode==='dinner'?(s.availD||{}):(s.availL||{}); // セッション別✕
+  return m[key]!==false;
+}
 function toggleSessOk(id,sess,btn){
   const s=gs(id);if(!s)return;
   const field=sess==='lunch'?'lunchOk':'dinnerOk';
@@ -903,7 +918,10 @@ function renderModalBody(key,d,dow){
   if(unavail.length){
     h+=`<div class="albl">出勤不可</div><div class="arows">`;
     unavail.forEach(s=>{
-      const reason=!isAvail(s,key)?'欠勤希望':(sessMode==='dinner'?'🌙夜出勤なし':'🌞昼出勤なし');
+      let reason;
+      if(!isAvail(s,key)) reason='欠勤希望（終日）';
+      else if(!sessOk(s)) reason=(sessMode==='dinner'?'🌙夜出勤なし':'🌞昼出勤なし');
+      else reason=(sessMode==='dinner'?'🌙夜の休み希望':'🌞昼の休み希望');
       h+=`<div class="arow unav"><div class="adot"></div><div><div class="aname">${s.name}</div></div><span style="font-size:.65rem;color:var(--muted)">${reason}</span></div>`;
     });
     h+='</div>';
@@ -1116,7 +1134,7 @@ function renderWeekly(){
         const ro=ROLES.find(r=>r.id===a.role);
         const from=effFrom(s,key),to=effTo(s,key);
         h2+=`<td><span class="rdot" style="background:${ro?ro.color:'#888'}">${a.role}</span><div style="font-size:.55rem;color:var(--muted);font-family:'DM Mono',monospace">${from.slice(0,5)}〜${to.slice(0,5)}</div></td>`;
-      } else if(!isAvail(s,key)){
+      } else if(!availSess(s,key)){
         h2+=`<td><span style="color:var(--red);font-size:.8rem">✕</span></td>`;
       } else {
 h2+=`<td></td>`;
@@ -1513,14 +1531,14 @@ async function syncAll(){
   const savedToken='tk'+Date.now()+Math.floor(Math.random()*1000);
   const payload=buildCloudPayload({viewData,savedToken});
   localStorage.setItem('unifiedShift',payload);
-  // 容量チェック（スプレッドシート1セル上限＝50,000字）
-  if(payload.length>50000){
+  // 容量チェック（GASが40,000字ずつ分割保存するので実質上限は大きい。安全枠12万字）
+  if(payload.length>120000){
     document.getElementById('syncSt').textContent='⚠ 容量超過・保存中止';
-    alert('🛑 保存を中止しました。\n\nデータ量が '+payload.length.toLocaleString()+' 字で、上限50,000字を超えています。\nこのまま送っても保存できず、データを失う恐れがあります。\n\nClaudeに「容量オーバーの対策をして」と相談してください。');
+    alert('🛑 保存を中止しました。\n\nデータ量が '+payload.length.toLocaleString()+' 字で、安全上限120,000字を超えています。\n\nClaudeに「容量オーバーの対策をして」と相談してください。');
     return;
   }
-  if(payload.length>45000){
-    alert('⚠ データ量が '+payload.length.toLocaleString()+' 字になっています（上限50,000字）。\nそろそろ容量対策が必要です。保存は続行します。');
+  if(payload.length>80000){
+    alert('⚠ データ量が '+payload.length.toLocaleString()+' 字になっています（安全上限120,000字）。\nそろそろ容量対策の相談時期です。保存は続行します。');
   }
   document.getElementById('syncSt').textContent='保存中...';
   try{
@@ -1600,6 +1618,8 @@ async function loadFromGas(){
         const merged=applyDefaults(cs);
         const ls=localStaff.find(x=>x.id===cs.id);
         if(ls&&ls.avail){ merged.avail=Object.assign({}, ls.avail, merged.avail||{}); }
+        if(ls&&ls.availL){ merged.availL=Object.assign({}, ls.availL, merged.availL||{}); }
+        if(ls&&ls.availD){ merged.availD=Object.assign({}, ls.availD, merged.availD||{}); }
         return merged;
       });
       if(d.lineHistory) lineHistory=d.lineHistory;
@@ -1635,6 +1655,54 @@ async function loadFromGas(){
     }
   }catch(e){
     document.getElementById('syncSt').textContent='ローカルデータ使用中';
+  }
+}
+
+// ============================================================
+// 休み希望カレンダー（kibou.html）からの取り込み
+// ============================================================
+async function importKibou(){
+  const monthKey=`${curY}-${String(curM+1).padStart(2,'0')}`;
+  const res=document.getElementById('kibouRes');
+  if(!confirm(`${curY}年${curM+1}月の休み希望を取り込みます。\n\n希望を出したスタッフの${curM+1}月の欠勤マークは、希望カレンダーの内容で置き換わります（役割割り当ても外れます）。\n\nよろしいですか？`)) return;
+  res.innerHTML='<div class="pres">取り込み中...</div>';
+  try{
+    const r=await fetch(GAS_URL+'?mode=kibou&month='+monthKey+'&t='+Date.now(),{redirect:'follow',cache:'no-cache'});
+    const d=await r.json();
+    const rows=d.rows||[];
+    if(!rows.length){res.innerHTML='<div class="pres terr">'+(curM+1)+'月の休み希望はまだ登録されていません</div>';return;}
+    const prefix=monthKey+'-';
+    let applied=[],notFound=[];
+    rows.forEach(row=>{
+      const s=gs(row.staffId)||staff.find(x=>x.name===row.staffName);
+      if(!s){notFound.push(row.staffName);return;}
+      if(!s.avail)s.avail={};if(!s.availL)s.availL={};if(!s.availD)s.availD={};
+      // その月の既存マークをクリア（希望カレンダーが正）
+      [s.avail,s.availL,s.availD].forEach(m=>{for(const k in m){if(k.startsWith(prefix))delete m[k];}});
+      let cnt=0;
+      for(const k in (row.days||{})){
+        if(!k.startsWith(prefix))continue;
+        const st=row.days[k];cnt++;
+        if(st==='both'){
+          s.avail[k]=false;
+          [dayDataL,dayDataD].forEach(ds=>{if(ds[k]&&ds[k].assignments)ds[k].assignments=ds[k].assignments.filter(a=>a.staffId!==s.id);});
+        }else if(st==='lunch'){
+          s.availL[k]=false;
+          if(dayDataL[k]&&dayDataL[k].assignments)dayDataL[k].assignments=dayDataL[k].assignments.filter(a=>a.staffId!==s.id);
+        }else if(st==='dinner'){
+          s.availD[k]=false;
+          if(dayDataD[k]&&dayDataD[k].assignments)dayDataD[k].assignments=dayDataD[k].assignments.filter(a=>a.staffId!==s.id);
+        }
+      }
+      applied.push(`${s.name}：${cnt}日`);
+    });
+    refreshViews();
+    let msg='<div class="pres"><span class="tok">✓ 取り込みました（'+applied.length+'名）</span><br>'+applied.join('<br>');
+    if(notFound.length)msg+='<br><span class="terr">⚠ スタッフが見つからず未反映: '+notFound.join('・')+'</span>';
+    msg+='<br><span style="font-size:.62rem;color:var(--muted)">この内容で良ければ「💾 保存」を押してください</span></div>';
+    res.innerHTML=msg;
+  }catch(e){
+    res.innerHTML='<div class="pres terr">⚠ 取り込みに失敗: '+e.message+'</div>';
   }
 }
 
@@ -1721,9 +1789,11 @@ function buildCloudPayload(extra){
     return keep;
   };
   const slimStaff=staff.map(s=>{
-    const av={};
+    const av={},avL={},avD={};
     if(s.avail){ for(const k in s.avail){ if(s.avail[k]===false && inWin(k)) av[k]=false; } }
-    return Object.assign({},s,{avail:av});
+    if(s.availL){ for(const k in s.availL){ if(s.availL[k]===false && inWin(k)) avL[k]=false; } }
+    if(s.availD){ for(const k in s.availD){ if(s.availD[k]===false && inWin(k)) avD[k]=false; } }
+    return Object.assign({},s,{avail:av,availL:avL,availD:avD});
   });
   const base={app:'unified',staff:slimStaff,dayDataL:slim(dayDataL),dayDataD:slim(dayDataD),lineHistory,alertConf};
   return JSON.stringify(Object.assign(base, extra||{}));
@@ -1801,7 +1871,7 @@ function buildHalfTable(y, m, fromDay, toDay){
       const dow=new Date(y,m,d).getDay();
       const isOpen=data.open;
       const asgn=data.assignments.find(a=>a.staffId===s.id&&a.role);
-      const avail=isAvail(s,key);
+      const avail=availSess(s,key);
       const isSu=dow===0,isSa=dow===6,isH=JP_HOL.has(key);
       const wkend=isSu||isSa||isH;
       let cell='',bg='';
@@ -2053,7 +2123,7 @@ function renderMonthlyMatrix(y,m,daysIn){
       const dow=new Date(y,m,d).getDay();
       const isOpen=data.open;
       const asgn=data.assignments.find(a=>a.staffId===s.id&&a.role);
-      const avail=isAvail(s,key);
+      const avail=availSess(s,key);
       const isSu=dow===0,isSa=dow===6,isH=JP_HOL.has(key);
       const wkend=isSu||isSa||isH;
 

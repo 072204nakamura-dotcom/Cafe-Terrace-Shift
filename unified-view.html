@@ -128,7 +128,11 @@ const VIEW_DOW=['日','月','火','水','木','金','土'];
 
 function vdk(y,m,d){return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
 function vdd(dayData,key){const x=dayData[key]; if(!x)return{open:true,assignments:[]}; return {open:x.open!==false, assignments:x.assignments||[]};}
-function vAvail(s,key){ if(s.avail&&s.avail[key]===false) return false; return true; }
+function vAvail(s,key){
+  if(s.avail&&s.avail[key]===false) return false; // 終日✕
+  const m=sess==='dinner'?(s.availD||{}):(s.availL||{});
+  return m[key]!==false;
+}
 
 function buildHalfView(staff,dayData,y,m,fromDay,toDay){
   const daysIn=new Date(y,m+1,0).getDate();
@@ -289,7 +293,7 @@ function renderWeekly(){
       if(a){
         const ro=ROLES.find(r=>r.id===a.role);
         h+=`<td><span class="rdot" style="background:${ro?ro.color:'#888'}">${a.role}</span></td>`;
-      } else if(s.avail&&s.avail[key]===false){
+      } else if(!vAvail(s,key)){
         h+=`<td style="background:rgba(192,48,48,.08)"><span style="color:#c03030;font-weight:700">✕</span></td>`;
       } else {
         h+=`<td></td>`;
