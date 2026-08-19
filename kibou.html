@@ -100,12 +100,14 @@ let myDays={};       // 自分の希望 {key: 'lunch'|'dinner'|'both'}
 let who=null;        // 選択中スタッフ
 let dirty=false;
 
-// ── 対象月＝来月。編集可＝今日が1〜15日 ──
+// ── 対象月：15日まで＝来月／16日以降＝翌々月（常にどこかの月が入力できる） ──
 const now=new Date();
-const tY=now.getMonth()===11?now.getFullYear()+1:now.getFullYear();
-const tM=now.getMonth()===11?0:now.getMonth()+1; // 0-11
+const _base=new Date(now.getFullYear(), now.getMonth()+(now.getDate()<=DEADLINE_DAY?1:2), 1);
+const tY=_base.getFullYear();
+const tM=_base.getMonth(); // 0-11
 const monthKey=`${tY}-${String(tM+1).padStart(2,'0')}`;
-const editable=now.getDate()<=DEADLINE_DAY;
+const editable=true; // 締切は「対象月の前月15日」。それを過ぎると自動で次の月に切り替わる
+const _dl=new Date(tY, tM-1, DEADLINE_DAY); // 締切日（対象月の前月15日）
 
 function dk(d){return `${monthKey}-${String(d).padStart(2,'0')}`;}
 function shortName(s){return (s.name||'').split(/\s|　/)[0];}
@@ -164,12 +166,7 @@ function applyMine(){
 }
 function updateDeadlineBox(){
   const el=document.getElementById('deadlineBox');
-  const mLabel=`${tM+1}月`;
-  if(editable){
-    el.innerHTML=`<div class="deadline open">✅ ${mLabel}分を入力できます（締切：${now.getMonth()+1}月${DEADLINE_DAY}日いっぱい）</div>`;
-  }else{
-    el.innerHTML=`<div class="deadline closed">🔒 ${mLabel}分の受付は締め切りました（毎月1日〜15日に翌月分を入力できます）。現在はシフト作成中です。</div>`;
-  }
+  el.innerHTML=`<div class="deadline open">✅ ${tM+1}月分を入力できます（締切：${_dl.getMonth()+1}月${DEADLINE_DAY}日いっぱい）</div>`;
 }
 function updateSaveBtn(){
   document.getElementById('saveBtn').disabled=!(editable&&who);
@@ -271,7 +268,7 @@ async function saveWish(){
       dirty=false;
       render();
       const cnt=Object.keys(myDays).length;
-      alert('✓ 保存しました！\n'+who.name+'さんの'+(tM+1)+'月の休み希望：'+cnt+'日分\n\n変更したくなったら、締切（'+DEADLINE_DAY+'日）までなら何度でも入れ直せます。');
+      alert('✓ 保存しました！\n'+who.name+'さんの'+(tM+1)+'月の休み希望：'+cnt+'日分\n\n変更したくなったら、締切（'+(_dl.getMonth()+1)+'月'+DEADLINE_DAY+'日）までなら何度でも入れ直せます。');
       document.getElementById('status').textContent='✓ 保存済み '+new Date().toLocaleTimeString('ja-JP');
     }else{
       alert('⚠ 保存が確認できませんでした。\n・締切を過ぎている\n・電波が不安定\nのどちらかの可能性があります。\nもう一度「💾 保存」を押してみてください。');
