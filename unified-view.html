@@ -55,7 +55,7 @@ th{background:#f5f0e8;font-weight:600;}
 <body>
 <div class="hdr">
   <div>
-    <div><span class="logo">Cafe照×なかむら</span><span class="logo-sub">出勤表</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v1</span></div>
+    <div><span class="logo">Cafe照×なかむら</span><span class="logo-sub">出勤表</span><span style="font-size:.55rem;color:#3a8a5a;margin-left:6px">統合v2</span></div>
     <div style="margin-top:5px">
       <button id="btnSessL" onclick="setSess('lunch')" style="background:#d4820a;color:#fff;border:1px solid #d4820a;border-radius:6px 0 0 6px;padding:4px 12px;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer">🌞 昼</button><button id="btnSessD" onclick="setSess('dinner')" style="background:#fff;color:#6040a0;border:1px solid #6040a0;border-radius:0 6px 6px 0;padding:4px 12px;font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer">🌙 夜</button>
     </div>
@@ -73,6 +73,11 @@ th{background:#f5f0e8;font-weight:600;}
 
 <!-- 月間出勤表 -->
 <div class="page on" id="tab-monthly">
+  <div class="mnav" style="margin-top:4px">
+    <button class="nbtn" onclick="chMonthV(-1)">◀ 前月</button>
+    <div class="mtitle" id="monthTitle"></div>
+    <button class="nbtn" onclick="chMonthV(1)">次月 ▶</button>
+  </div>
   <div id="monthlyContent"><div class="loading">📊 読み込み中...</div></div>
 </div>
 
@@ -93,6 +98,11 @@ const GAS='https://script.google.com/macros/s/AKfycbw3gFMbJbW7rTjBzZH1zV6EiRDJ55
 let gasData=null;
 let weekOff=0;
 let sess='lunch';
+let vY=new Date().getFullYear(), vM=new Date().getMonth(); // 表示月（開いたときは今月）
+function chMonthV(d){
+  vM+=d; if(vM<0){vM=11;vY--;} if(vM>11){vM=0;vY++;}
+  if(gasData) showMonthly(gasData.viewData||{});
+}
 function curDayData(){
   if(!gasData) return {};
   if(sess==='dinner') return gasData.dayDataD||{};
@@ -176,15 +186,13 @@ function showMonthly(d){
   document.title='シフト出勤表 '+(sess==='lunch'?'昼':'夜');
   const staff=(gasData&&gasData.staff)||[];
   const dayData=curDayData();
-  // 月の取得：viewDataにyear/monthがあれば使う、なければtitleから
-  let y=d.year, m=d.month;
-  if(y===undefined||m===undefined){
-    const mt=(d.title||'').match(/(\d{4})年(\d+)月/);
-    if(mt){y=parseInt(mt[1]);m=parseInt(mt[2])-1;}else{const n=new Date();y=n.getFullYear();m=n.getMonth();}
-  }
-  const daysIn=d.daysIn||new Date(y,m+1,0).getDate();
+  // 表示月は◀▶で選んだ月（開いたときは今月）
+  const y=vY, m=vM;
+  const daysIn=new Date(y,m+1,0).getDate();
+  const mtEl=document.getElementById('monthTitle');
+  if(mtEl) mtEl.textContent=`${y}年 ${m+1}月　${sess==='lunch'?'🌞昼':'🌙夜'}`;
   const legend=VIEW_ROLES.map(r=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:8px"><span style="display:inline-block;width:16px;height:14px;border-radius:2px;background:${r.color}44;color:${r.color};font-weight:700;text-align:center;font-size:7pt;line-height:14px">${r.id}</span>${r.name}</span>`).join('');
-  let h=`<div class="saved-info">📅 ${(d.title||'').replace('出勤表','')}${sess==='lunch'?'🌞昼':'🌙夜'} 出勤表　作成：${d.savedAt||''}</div>`;
+  let h=`<div class="saved-info">📅 ${y}年${m+1}月　${sess==='lunch'?'🌞昼':'🌙夜'} 出勤表　（シフト更新：${d.savedAt||'—'}）</div>`;
   h+=`<div class="half-block"><div class="half-title">前半（1〜15日）</div>${buildHalfView(staff,dayData,y,m,1,15)}</div>`;
   h+=`<div class="half-block"><div class="half-title">後半（16〜${daysIn}日）</div>${buildHalfView(staff,dayData,y,m,16,daysIn)}</div>`;
   h+=`<div class="legend">${legend}<span style="margin-right:8px"><b style="color:#c03030">✕</b> 欠勤希望</span><span>□ 未アサイン</span></div>`;
@@ -197,15 +205,8 @@ function renderWeekly(){
   const staff=gasData.staff||[];
   const dayData=curDayData();
 
-  // 週の日付を計算（curY/curMの第1週基準）
-  // viewDataからyear/monthを取得
-  const vd=gasData.viewData;
-  let baseY=new Date().getFullYear(), baseM=new Date().getMonth();
-  if(vd&&vd.title){
-    const match=vd.title.match(/(\d{4})年(\d+)月/);
-    if(match){baseY=parseInt(match[1]);baseM=parseInt(match[2])-1;}
-  }
-  const base=new Date(baseY,baseM,1);
+  // 週の基準は「今日のいる週」
+  const base=new Date();
   const dow=base.getDay();
   const mon=new Date(base);
   mon.setDate(base.getDate()-(dow===0?6:dow-1)+weekOff*7);
