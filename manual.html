@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>使い方｜休み希望・出勤表</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{--bg:#f7f3ec;--surface:#fff;--surface2:#f0e9dd;--border:#e0d5c2;--muted:#8a7055;--accent:#b8622a;--green:#3d7a50;--red:#c03030;--blue:#2060a0;--lunch:#d4820a;--dinner:#6040a0;}
+body{font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;background:var(--bg);color:#2a1e10;line-height:1.9;font-size:14.5px;padding:14px 14px 40px;}
+.wrap{max-width:640px;margin:0 auto;}
+h1{font-size:1.15rem;color:var(--accent);text-align:center;padding:10px 0 2px;}
+.sub{text-align:center;font-size:.72rem;color:var(--muted);margin-bottom:14px;}
+h2{font-size:1rem;color:var(--accent);border-left:4px solid var(--accent);padding-left:9px;margin:26px 0 10px;}
+p{margin:7px 0;}
+ol,ul{margin:7px 0 7px 22px;}
+li{margin:4px 0;}
+.btn{display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:1px 9px;font-size:.85em;font-weight:700;color:#2a1e10;white-space:nowrap;}
+.btn.g{background:var(--green);border-color:var(--green);color:#fff;}
+.btn.b{background:var(--blue);border-color:var(--blue);color:#fff;}
+.box{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 12px;font-size:.86em;margin:9px 0;}
+table{width:100%;border-collapse:collapse;margin:9px 0;font-size:.88em;background:var(--surface);}
+th,td{border:1px solid var(--border);padding:7px 9px;text-align:left;vertical-align:top;}
+th{background:var(--surface2);white-space:nowrap;}
+td:first-child{white-space:nowrap;font-weight:700;}
+.st{display:inline-block;font-size:.85em;font-weight:900;border-radius:5px;padding:0 7px;white-space:nowrap;}
+.st-l{background:rgba(212,130,10,.18);color:var(--lunch);border:1.5px solid var(--lunch);}
+.st-d{background:rgba(96,64,160,.15);color:var(--dinner);border:1.5px solid var(--dinner);}
+.st-b{background:rgba(192,48,48,.14);color:var(--red);border:1.5px solid var(--red);}
+.back{display:block;text-align:center;margin:30px auto 0;color:var(--accent);font-weight:700;}
+@media(max-width:420px){td:first-child{white-space:normal;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>❓ 使い方ガイド</h1>
+<div class="sub">休み希望カレンダー・シフト出勤表（Cafe照 × 洋食だいにんぐなかむら）</div>
+
+<h2>1. まず開いたら</h2>
+<p>スタッフのみなさんが使うページは2つです。</p>
+<ul>
+  <li><b>🗓 休み希望カレンダー</b> … 来月の休み希望を自分で入力するページ</li>
+  <li><b>👀 シフト出勤表</b> … 決まったシフトを見るページ</li>
+</ul>
+<div class="box">💡 LINEで届いたリンクを開いたら、スマホの「共有」→「ホーム画面に追加」をしておくと、次からアプリのようにワンタップで開けます。</div>
+
+<h2>2. 休み希望を出す</h2>
+<ol>
+  <li>休み希望カレンダーを開きます。</li>
+  <li>いちばん上で<b>自分の名前</b>を選びます（次からは自動で選ばれています）。</li>
+  <li>休みたい日を<b>タップ</b>します。押すたびに切り替わります。<br>
+  なし → <span class="st st-l">🌞昼✕</span> → <span class="st st-d">🌙夜✕</span> → <span class="st st-b">終日✕</span> → なし<br>
+  （夜出勤のない方は「なし ⇄ 終日✕」の切り替えだけです）</li>
+  <li>入れ終わったら、画面下の <span class="btn g">💾 この内容で保存</span> を押します。</li>
+  <li>「✓ 保存しました！」と出たら完了です。</li>
+</ol>
+<table>
+  <tr><th>マーク</th><th>意味</th></tr>
+  <tr><td><span class="st st-l">🌞昼✕</span></td><td>昼だけ休み（夜は出られます）</td></tr>
+  <tr><td><span class="st st-d">🌙夜✕</span></td><td>夜だけ休み（昼は出られます）</td></tr>
+  <tr><td><span class="st st-b">終日✕</span></td><td>まる1日休み</td></tr>
+</table>
+<div class="box">👀 ほかの人の休み希望も各日に表示されます。<b style="color:var(--red)">赤くなっている日（⚠残◯/◯人）</b>は、その日に出られる人が足りなくなりそうな日です。できれば別の日にずらしてもらえると助かります🙏</div>
+
+<h2>3. 締切と入れ直し</h2>
+<ul>
+  <li>締切は<b>毎月15日</b>です。画面上部に「◯月分を入力できます（締切：◯月15日いっぱい）」と表示されます。</li>
+  <li>16日になると、自動的に<b>その次の月</b>の受付に切り替わります。</li>
+  <li>締切までなら<b>何度でも入れ直せます</b>。日をタップして変えたら、もう一度 <span class="btn g">💾 この内容で保存</span> を押してください（自分の分だけ上書きされます）。</li>
+  <li>ほかの人の最新の希望を見たいときは <span class="btn b">🔄 更新</span> を押します。</li>
+</ul>
+
+<h2>4. 出勤表を見る</h2>
+<ol>
+  <li>シフト出勤表のページを開きます。開いたときは<b>今の月</b>が表示されます。</li>
+  <li>上の <span class="btn">🌞 昼</span> <span class="btn">🌙 夜</span> ボタンで、昼のシフトと夜のシフトを切り替えます。</li>
+  <li><span class="btn">◀ 前月</span> <span class="btn">次月 ▶</span> で月を移動できます。</li>
+  <li><span class="btn">📋 役割一覧</span> タブでは、1週間ごとの役割の並びが見られます（<span class="btn">◀ 前週</span> <span class="btn">次週 ▶</span> で移動）。</li>
+  <li>表が古いと感じたら <span class="btn">🔄 更新</span> を押すと最新になります。</li>
+</ol>
+<table>
+  <tr><th>表のマーク</th><th>意味</th></tr>
+  <tr><td>C・B・K・P など</td><td>その日のあなたの役割（色つきの文字）</td></tr>
+  <tr><td>なC・なH・なS・なK</td><td>洋食だいにんぐなかむらでの勤務</td></tr>
+  <tr><td><b style="color:var(--red)">✕</b></td><td>欠勤希望（お休み）</td></tr>
+  <tr><td>□（空白）</td><td>未アサイン（出勤可だけど割り当てなし）</td></tr>
+</table>
+
+<h2>5. 困ったとき</h2>
+<table>
+  <tr><th>症状</th><th>対処</th></tr>
+  <tr><td>「先に名前を選んでください」と出る</td><td>いちばん上で自分の名前を選んでから、日をタップしてください。</td></tr>
+  <tr><td>名前のリストに自分がいない</td><td><span class="btn b">🔄 更新</span> を押してください。それでも出ないときは店長に声をかけてください。</td></tr>
+  <tr><td>「⚠ 保存が確認できませんでした」と出る</td><td>電波の良いところで、もう一度 <span class="btn g">💾 この内容で保存</span> を押してください。締切を過ぎている場合も保存できません。</td></tr>
+  <tr><td>「⚠ 通信エラーで保存できませんでした」と出る</td><td>電波の状態を確認して、少し待ってからもう一度お試しください。</td></tr>
+  <tr><td>出勤表が古いまま</td><td><span class="btn">🔄 更新</span> を押してください。直らないときはページを閉じて開き直してください。</td></tr>
+  <tr><td>入力できる月が思っていた月と違う</td><td>締切（毎月15日）を過ぎると、次の月の受付に自動で切り替わる仕組みです。</td></tr>
+</table>
+<div class="box">💬 それでも困ったとき、使いにくいところ、「こうしてほしい」があれば、各ページの <span class="btn">💬 ご意見箱</span> から送ってください。小さなことでも大歓迎です。匿名でも送れます。</div>
+
+<a class="back" href="kibou.html">← 休み希望カレンダーへ</a>
+<a class="back" href="unified-view.html">← シフト出勤表へ</a>
+</div>
+</body>
+</html>
