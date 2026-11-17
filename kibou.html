@@ -20,6 +20,10 @@ body{font-family:'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;backgroun
 .howto{font-size:.7rem;color:var(--muted);line-height:1.8;}
 .state-demo{display:inline-block;font-size:.66rem;font-weight:900;border-radius:5px;padding:1px 7px;margin:0 2px;}
 .mtitle{text-align:center;font-size:1rem;font-weight:900;color:var(--accent);margin:6px 0 10px;}
+.mnavrow{display:flex;align-items:center;gap:6px;max-width:640px;margin:0 auto;}
+.mnavrow .mtitle{flex:1;margin:6px 0;}
+.mnav{width:44px;padding:7px 0;border-radius:9px;border:1.5px solid var(--border);background:var(--surface);color:var(--accent);font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit;}
+.mnav:disabled{opacity:.25;cursor:default;}
 table.cal{width:100%;border-collapse:separate;border-spacing:3px;table-layout:fixed;}
 .cal th{font-size:.66rem;color:var(--muted);padding:2px;}
 .cal th.su{color:var(--red);}.cal th.sa{color:var(--blue);}
@@ -95,7 +99,11 @@ table.ltab{border-collapse:collapse;font-size:.6rem;min-width:100%;}
   </div>
 </div>
 
-<div class="mtitle" id="mtitle">読み込み中…</div>
+<div class="mnavrow">
+  <button class="mnav" id="mnavBack" onclick="moveMonth(-1)">◀</button>
+  <div class="mtitle" id="mtitle">読み込み中…</div>
+  <button class="mnav" id="mnavFwd" onclick="moveMonth(1)" disabled>▶</button>
+</div>
 <div class="vtabs">
   <button class="vtab on" id="vtabCal" onclick="setView('cal')">🗓 カレンダー</button>
   <button class="vtab" id="vtabList" onclick="setView('list')">📋 一覧表</button>
@@ -135,7 +143,12 @@ const monthKey=`${tY}-${String(tM+1).padStart(2,'0')}`;
 const editable=true; // 締切は「対象月の前月15日」。それを過ぎると自動で次の月に切り替わる
 const _dl=new Date(tY, tM-1, DEADLINE_DAY); // 締切日（対象月の前月15日）
 
-function dk(d){return `${monthKey}-${String(d).padStart(2,'0')}`;}
+let vY=tY, vM=tM; // 表示中の月（◀▶で過去の月も見られる）
+function vKey(){return vY+'-'+String(vM+1).padStart(2,'0');}
+function isTarget(){return vY===tY&&vM===tM;}
+function canEdit(){return editable&&isTarget();}
+const wishCache={};
+function dk(d){return vKey()+'-'+String(d).padStart(2,'0');}
 function shortName(s){return (s.name||'').split(/\s|　/)[0];}
 function lunchStaffCount(){return staff.filter(s=>s.lunchOk!==false).length;}
 function dinnerStaffCount(){return staff.filter(s=>s.dinnerOk!==false).length;}
@@ -151,11 +164,12 @@ async function loadAll(showMsg){
     const d1=JSON.parse(t1.slice(t1.indexOf('{'),t1.lastIndexOf('}')+1));
     if(d1.staff&&d1.staff.length) staff=d1.staff;
     // 休み希望
-    const r2=await fetch(GAS+'?mode=kibou&month='+monthKey+'&t='+Date.now(),{redirect:'follow',cache:'no-cache'});
+    const r2=await fetch(GAS+'?mode=kibou&month='+vKey()+'&t='+Date.now(),{redirect:'follow',cache:'no-cache'});
     const d2=await r2.json();
     wishes=(d2.rows||[]);
+    wishCache[vKey()]=wishes;
     // 自分の既存希望を反映
-    if(who){
+    if(who&&isTarget()){
       const mine=wishes.find(w=>w.staffId===who.id);
       if(mine&&!dirty) myDays=Object.assign({},mine.days);
     }
@@ -166,6 +180,37 @@ async function loadAll(showMsg){
   }catch(e){
     st.textContent='⚠ 読み込みに失敗しました。電波の良いところでもう一度お試しください。';
   }
+}
+
+// ── 月の切り替え（過去の月は閲覧のみ） ──
+async function moveMonth(delta){
+  let y=vY,m=vM+delta;
+  if(m<0){m=11;y--;}
+  if(m>11){m=0;y++;}
+  if(y>tY||(y===tY&&m>tM))return; // 入力対象の月より先は無い
+  vY=y;vM=m;
+  document.getElementById('mnavFwd').disabled=isTarget();
+  const key=vKey();
+  if(wishCache[key]){
+    wishes=wishCache[key];
+  }else{
+    const st=document.getElementById('status');
+    st.textContent='読み込み中…';
+    try{
+      const r=await fetch(GAS+'?mode=kibou&month='+key+'&t='+Date.now(),{redirect:'follow',cache:'no-cache'});
+      const d=await r.json();
+      wishes=(d.rows||[]);
+      wishCache[key]=wishes;
+      st.textContent='最終更新 '+new Date().toLocaleTimeString('ja-JP');
+    }catch(e){
+      wishes=[];
+      st.textContent='⚠ 読み込みに失敗しました。電波の良いところでもう一度お試しください。';
+    }
+  }
+  if(isTarget()&&who&&!dirty)applyMine();
+  updateDeadlineBox();
+  updateSaveBtn();
+  render();
 }
 
 function buildWhoSel(){
@@ -187,20 +232,25 @@ function changeWho(){
 }
 function applyMine(){
   if(!who)return;
+  if(!isTarget()){myDays={};return;}
   const mine=wishes.find(w=>w.staffId===who.id);
   myDays=mine?Object.assign({},mine.days):{};
 }
 function updateDeadlineBox(){
   const el=document.getElementById('deadlineBox');
-  el.innerHTML=`<div class="deadline open">✅ ${tM+1}月分を入力できます（締切：${_dl.getMonth()+1}月${DEADLINE_DAY}日いっぱい）</div>`;
+  if(isTarget()){
+    el.innerHTML=`<div class="deadline open">✅ ${tM+1}月分を入力できます（締切：${_dl.getMonth()+1}月${DEADLINE_DAY}日いっぱい）</div>`;
+  }else{
+    el.innerHTML=`<div class="deadline closed">📖 ${vY}年${vM+1}月分は閲覧のみです（受付は終了しています）。入力できるのは「${tY}年${tM+1}月」だけです。</div>`;
+  }
 }
 function updateSaveBtn(){
-  document.getElementById('saveBtn').disabled=!(editable&&who);
+  document.getElementById('saveBtn').disabled=!(canEdit()&&who);
 }
 
 // ── タップで状態切り替え ──
 function tapDay(d){
-  if(!editable)return;
+  if(!canEdit())return;
   if(!who){alert('先に名前を選んでください');return;}
   const key=dk(d);
   const cur=myDays[key]||'';
@@ -228,25 +278,25 @@ function setView(v){
 }
 // ── 一覧表（スタッフ×日付マトリクス） ──
 function stateOf(s,key){
-  if(who&&s.id===who.id) return myDays[key]||null;
+  if(who&&s.id===who.id&&isTarget()) return myDays[key]||null;
   const w=wishes.find(x=>x.staffId===s.id);
   return w?(w.days[key]||null):null;
 }
 function renderList(){
-  const days=new Date(tY,tM+1,0).getDate();
+  const days=new Date(vY,vM+1,0).getDate();
   const lTotal=lunchStaffCount();
   let h='<div class="lwrap"><table class="ltab"><thead><tr><th class="nm">スタッフ</th>';
   for(let d2=1;d2<=days;d2++){
-    const dow=new Date(tY,tM,d2).getDay(), isHol=JP_HOL.has(dk(d2));
+    const dow=new Date(vY,vM,d2).getDay(), isHol=JP_HOL.has(dk(d2));
     const cls=(dow===0||isHol)?'su':dow===6?'sa':'';
     h+=`<th class="${cls}">${d2}<br><span style="font-weight:400">${'日月火水木金土'[dow]}</span></th>`;
   }
   h+='<th>希望数</th></tr></thead><tbody>';
   staff.forEach(s=>{
     let cnt=0;
-    h+=`<tr><td class="nm">${shortName(s)}${who&&s.id===who.id?' ✏':''}</td>`;
+    h+=`<tr><td class="nm">${shortName(s)}${who&&s.id===who.id&&isTarget()?' ✏':''}</td>`;
     for(let d2=1;d2<=days;d2++){
-      const key=dk(d2), dow=new Date(tY,tM,d2).getDay(), isHol=JP_HOL.has(key);
+      const key=dk(d2), dow=new Date(vY,vM,d2).getDay(), isHol=JP_HOL.has(key);
       const cls=(dow===0||isHol)?'su':dow===6?'sa':'';
       const st=stateOf(s,key);
       let mark='';
@@ -259,7 +309,7 @@ function renderList(){
   });
   h+='</tbody><tfoot><tr><td class="nm" style="background:#2a2018;color:#ffd9a0">出られる人数</td>';
   for(let d2=1;d2<=days;d2++){
-    const key=dk(d2), dow=new Date(tY,tM,d2).getDay(), isHol=JP_HOL.has(key);
+    const key=dk(d2), dow=new Date(vY,vM,d2).getDay(), isHol=JP_HOL.has(key);
     const req=(dow===0||dow===6||isHol)?REQ_WKHOL:REQ_WEEKDAY;
     const off=staff.filter(s=>s.lunchOk!==false&&['lunch','both'].includes(stateOf(s,key))).length;
     const avail=lTotal-off;
@@ -271,8 +321,9 @@ function renderList(){
 }
 // ── 描画 ──
 function render(){
-  document.getElementById('mtitle').textContent=`${tY}年 ${tM+1}月 の休み希望`;
-  const first=new Date(tY,tM,1).getDay(), days=new Date(tY,tM+1,0).getDate();
+  document.getElementById('mtitle').textContent=`${vY}年 ${vM+1}月 の休み希望`;
+  document.getElementById('mnavFwd').disabled=isTarget();
+  const first=new Date(vY,vM,1).getDay(), days=new Date(vY,vM+1,0).getDate();
   const lTotal=lunchStaffCount(), dTotal=dinnerStaffCount();
   let h='<table class="cal"><thead><tr>';
   ['日','月','火','水','木','金','土'].forEach((n,i)=>h+=`<th class="${i===0?'su':i===6?'sa':''}">${n}</th>`);
@@ -280,13 +331,13 @@ function render(){
   for(let i=0;i<first;i++)h+='<td class="day empty"></td>';
   let col=first;
   for(let d=1;d<=days;d++){
-    const key=dk(d), dow=new Date(tY,tM,d).getDay(), isHol=JP_HOL.has(key);
+    const key=dk(d), dow=new Date(vY,vM,d).getDay(), isHol=JP_HOL.has(key);
     const req=(dow===0||dow===6||isHol)?REQ_WKHOL:REQ_WEEKDAY;
     // この日の全員の希望（自分の未保存分も反映して表示）
     const dayWish=[];
     staff.forEach(s=>{
       let st=null;
-      if(who&&s.id===who.id){ st=myDays[key]||null; }
+      if(who&&s.id===who.id&&isTarget()){ st=myDays[key]||null; }
       else{ const w=wishes.find(x=>x.staffId===s.id); st=w?(w.days[key]||null):null; }
       if(st)dayWish.push({s,st});
     });
@@ -294,16 +345,16 @@ function render(){
     const dinnerOff=dayWish.filter(x=>(x.st==='dinner'||x.st==='both')&&x.s.dinnerOk!==false).length;
     const lunchAvail=lTotal-lunchOff;
     const isShort=lunchAvail<req;
-    const myState=who?(myDays[key]||''):'';
+    const myState=(who&&isTarget())?(myDays[key]||''):'';
     const stCls=myState==='lunch'?'st-lunch':myState==='dinner'?'st-dinner':myState==='both'?'st-both':'st-none';
-    const stTxt=myState==='lunch'?'🌞昼✕':myState==='dinner'?'🌙夜✕':myState==='both'?'終日✕':(editable&&who?'タップ':'');
-    h+=`<td class="day ${isShort?'short':''} ${editable?'':'locked'}" onclick="tapDay(${d})">`;
+    const stTxt=myState==='lunch'?'🌞昼✕':myState==='dinner'?'🌙夜✕':myState==='both'?'終日✕':(canEdit()&&who?'タップ':'');
+    h+=`<td class="day ${isShort?'short':''} ${canEdit()?'':'locked'}" onclick="tapDay(${d})">`;
     h+=`<div class="dnum ${dow===0||isHol?'su':dow===6?'sa':''}">${d}${isHol?'<div class="hol">祝</div>':''}</div>`;
     h+=`<span class="mystate ${stCls}">${stTxt}</span>`;
     // 他の人の希望チップ
     h+='<div class="others">';
     dayWish.forEach(x=>{
-      if(who&&x.s.id===who.id)return;
+      if(who&&x.s.id===who.id&&isTarget())return;
       const cls=x.st==='lunch'?'l':x.st==='dinner'?'d':'b';
       const mark=x.st==='lunch'?'🌞':x.st==='dinner'?'🌙':'✕';
       h+=`<span class="oc ${cls}">${mark}${shortName(x.s)}</span>`;
@@ -325,6 +376,7 @@ function render(){
 // ── 保存 ──
 async function saveWish(){
   if(!who){alert('先に名前を選んでください');return;}
+  if(!isTarget()){alert('この月は閲覧のみです。入力できるのは'+(tM+1)+'月分だけです。「▶」で戻れます');return;}
   if(!editable){alert('締切を過ぎているため保存できません');return;}
   const btn=document.getElementById('saveBtn');
   btn.disabled=true;btn.textContent='保存中…';
@@ -341,7 +393,7 @@ async function saveWish(){
         const r=await fetch(GAS+'?mode=kibou&month='+monthKey+'&t='+Date.now(),{redirect:'follow',cache:'no-cache'});
         const d=await r.json();
         const mine=(d.rows||[]).find(w=>w.staffId===who.id);
-        if(mine&&mine.token===token){ok=true;wishes=d.rows;break;}
+        if(mine&&mine.token===token){ok=true;wishes=d.rows;wishCache[monthKey]=wishes;break;}
       }catch(e){}
     }
     if(ok){
