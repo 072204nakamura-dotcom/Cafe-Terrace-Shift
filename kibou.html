@@ -48,6 +48,23 @@ td.day.short{background:#fff2f2;border-color:var(--red);border-width:2px;}
 .savebtn:disabled{background:#b8b0a0;cursor:default;}
 .rbtn{background:var(--blue);color:#fff;border:none;border-radius:10px;padding:13px 15px;font-family:inherit;font-size:.8rem;cursor:pointer;}
 .status{font-size:.66rem;color:var(--muted);text-align:center;margin-top:5px;}
+.vtabs{display:flex;gap:0;margin:4px 0 8px;}
+.vtab{flex:1;padding:9px;border:1.5px solid var(--accent);background:var(--surface);color:var(--accent);font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;}
+.vtab:first-child{border-radius:9px 0 0 9px;}
+.vtab:last-child{border-radius:0 9px 9px 0;}
+.vtab.on{background:var(--accent);color:#fff;}
+.lwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--surface);border:1px solid var(--border);border-radius:10px;}
+table.ltab{border-collapse:collapse;font-size:.6rem;min-width:100%;}
+.ltab th,.ltab td{border:1px solid var(--border);padding:2px 3px;text-align:center;white-space:nowrap;}
+.ltab thead th{background:var(--surface2);font-size:.58rem;position:sticky;top:0;}
+.ltab .nm{position:sticky;left:0;background:var(--surface2);text-align:left;font-weight:700;font-size:.62rem;padding:3px 6px;z-index:2;max-width:72px;overflow:hidden;text-overflow:ellipsis;}
+.ltab td.su{background:#fdf3f3;}
+.ltab td.sa{background:#f2f6fb;}
+.ltab .m-l{color:var(--lunch);font-weight:900;}
+.ltab .m-d{color:var(--dinner);font-weight:900;}
+.ltab .m-b{color:var(--red);font-weight:900;}
+.ltab tfoot td{background:#2a2018;color:#ffd9a0;font-weight:700;font-size:.6rem;}
+.ltab tfoot td.short{color:#ff8a8a;}
 .loading{text-align:center;padding:30px;color:var(--muted);}
 .nightinfo{font-size:.62rem;color:var(--dinner);margin-top:2px;text-align:center;}
 </style>
@@ -79,7 +96,12 @@ td.day.short{background:#fff2f2;border-color:var(--red);border-width:2px;}
 </div>
 
 <div class="mtitle" id="mtitle">読み込み中…</div>
+<div class="vtabs">
+  <button class="vtab on" id="vtabCal" onclick="setView('cal')">🗓 カレンダー</button>
+  <button class="vtab" id="vtabList" onclick="setView('list')">📋 一覧表</button>
+</div>
 <div id="calBox" class="loading">クラウドから読み込んでいます…</div>
+<div id="listBox" style="display:none"></div>
 <div class="legend2">
   <span>🌞昼✕=昼だけ休み</span><span>🌙夜✕=夜だけ休み</span><span>終日✕=まる1日休み</span>
   <span style="color:var(--red)">⚠=出られる人が 平日9人／土日祝10人 を下回る日</span>
@@ -194,6 +216,59 @@ function tapDay(d){
   render();
 }
 
+// ── 表示切替 ──
+let view='cal';
+function setView(v){
+  view=v;
+  document.getElementById('vtabCal').classList.toggle('on',v==='cal');
+  document.getElementById('vtabList').classList.toggle('on',v==='list');
+  document.getElementById('calBox').style.display=v==='cal'?'':'none';
+  document.getElementById('listBox').style.display=v==='list'?'':'none';
+  if(v==='list')renderList();
+}
+// ── 一覧表（スタッフ×日付マトリクス） ──
+function stateOf(s,key){
+  if(who&&s.id===who.id) return myDays[key]||null;
+  const w=wishes.find(x=>x.staffId===s.id);
+  return w?(w.days[key]||null):null;
+}
+function renderList(){
+  const days=new Date(tY,tM+1,0).getDate();
+  const lTotal=lunchStaffCount();
+  let h='<div class="lwrap"><table class="ltab"><thead><tr><th class="nm">スタッフ</th>';
+  for(let d2=1;d2<=days;d2++){
+    const dow=new Date(tY,tM,d2).getDay(), isHol=JP_HOL.has(dk(d2));
+    const cls=(dow===0||isHol)?'su':dow===6?'sa':'';
+    h+=`<th class="${cls}">${d2}<br><span style="font-weight:400">${'日月火水木金土'[dow]}</span></th>`;
+  }
+  h+='<th>希望数</th></tr></thead><tbody>';
+  staff.forEach(s=>{
+    let cnt=0;
+    h+=`<tr><td class="nm">${shortName(s)}${who&&s.id===who.id?' ✏':''}</td>`;
+    for(let d2=1;d2<=days;d2++){
+      const key=dk(d2), dow=new Date(tY,tM,d2).getDay(), isHol=JP_HOL.has(key);
+      const cls=(dow===0||isHol)?'su':dow===6?'sa':'';
+      const st=stateOf(s,key);
+      let mark='';
+      if(st==='lunch'){mark='<span class="m-l">🌞</span>';cnt++;}
+      else if(st==='dinner'){mark='<span class="m-d">🌙</span>';cnt++;}
+      else if(st==='both'){mark='<span class="m-b">✕</span>';cnt++;}
+      h+=`<td class="${cls}">${mark}</td>`;
+    }
+    h+=`<td style="font-weight:700">${cnt}</td></tr>`;
+  });
+  h+='</tbody><tfoot><tr><td class="nm" style="background:#2a2018;color:#ffd9a0">出られる人数</td>';
+  for(let d2=1;d2<=days;d2++){
+    const key=dk(d2), dow=new Date(tY,tM,d2).getDay(), isHol=JP_HOL.has(key);
+    const req=(dow===0||dow===6||isHol)?REQ_WKHOL:REQ_WEEKDAY;
+    const off=staff.filter(s=>s.lunchOk!==false&&['lunch','both'].includes(stateOf(s,key))).length;
+    const avail=lTotal-off;
+    h+=`<td class="${avail<req?'short':''}">${avail}</td>`;
+  }
+  h+='<td>—</td></tr></tfoot></table></div>';
+  h+='<div style="font-size:.6rem;color:var(--muted);margin-top:5px">🌞=昼休み　🌙=夜休み　✕=終日休み　✏=自分（未保存の変更も反映）　下段=昼に出られる人数（赤=平日'+REQ_WEEKDAY+'人/土日祝'+REQ_WKHOL+'人を下回る）<br>横にスクロールできます📱</div>';
+  document.getElementById('listBox').innerHTML=h;
+}
 // ── 描画 ──
 function render(){
   document.getElementById('mtitle').textContent=`${tY}年 ${tM+1}月 の休み希望`;
@@ -244,6 +319,7 @@ function render(){
   h+='</tr></tbody></table>';
   document.getElementById('calBox').innerHTML=h;
   document.getElementById('calBox').className='';
+  if(view==='list')renderList();
 }
 
 // ── 保存 ──
